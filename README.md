@@ -58,8 +58,26 @@ The simulator UI separates query-shape inputs from response-derived signals:
 - `specs\primitive-ontology.yaml` is the source of truth for primitive names and descriptions.
 - `specs\simulator-capabilities.yaml` is the source of truth for which primitives each platform can synthesize as query flags.
 - Response-derived signals such as `large_result` and `low_latency_sensitive` are shown separately in the UI and are driven by response distributions such as `responses.result_count` or `responses.latency_ms`, not by generated query syntax.
+- The simulator UI includes a Matcher Source inspector. Checked primitive flags define the generated sample shape; the selected checked row defines which primitive rule is inspected. The normalized matcher input highlights the exact fields read by that primitive's rule conditions.
 - The simulator UI currently edits the global scenario `responses:` block. YAML scenarios may still define per-shape overrides under `query_shapes[].responses`; adding dedicated UI controls for those shape-level response overrides is future work.
 - Extraction rules emit `primitive_signals` with `signal_weight` and `rule_confidence`. Recommendation confidence remains a separate profile/recommendation concept.
+
+### Response Metadata And Dashboards
+
+Simulator `responses:` metadata flows through the pipeline as event evidence:
+
+```text
+scenario responses
+-> generated event response.latency_ms / response.response_bytes / response.result_count
+-> primitive rules and primitive profiles
+-> aggregate latency/data metrics
+-> access-pattern scores
+-> recommendations and dashboard rows
+```
+
+The basic CLI dashboard does not render `latency_ms`, `response_bytes`, or `result_count` as top-level columns. It renders the resulting dominant pattern and recommendation. Response metadata still affects that row when it changes matched primitives such as `large_result`, latency/data-weighted primitive profiles, pattern scores, or recommendation evidence.
+
+Kibana lineage views expose the response metadata directly on event-level documents. Use `workload-lineage-events` or `workload-primitive-events` to inspect the raw response fields behind a dashboard result.
 
 ## Explore In Kibana
 
@@ -90,13 +108,13 @@ http://localhost:5601
 Useful data views:
 
 - `workload-primitive-signals`: primitive signal weight over time by platform, system, scenario, and template.
-- `workload-primitive-events`: event-level primitive signals and normalized queries.
-- `workload-aggregate-windows`: request-count, latency-cost, and template-stability aggregations.
+- `workload-primitive-events`: event-level primitive signals, normalized queries, and response metadata.
+- `workload-aggregate-windows`: request-count, latency-cost, response-volume, and template-stability aggregations.
 - `workload-profiles`: dominant patterns and profile-level evidence.
 - `workload-recommendations`: recommendation severity, matched rule id, and target technology.
 - `workload-lineage-recommendations`: recommendation backtrace with rule thresholds and observed values.
 - `workload-lineage-templates`: top template evidence with normalized query, matched rules, and sample events.
-- `workload-lineage-events`: event-forward trace from query to template/profile/recommendation IDs.
+- `workload-lineage-events`: event-forward trace from query and response metadata to template/profile/recommendation IDs.
 - `workload-lineage-validation`: simulator expected-vs-observed trust check.
 
 Raw query text/body is not exported by default. Add `--include-raw-query` only for local debugging with synthetic data.
@@ -135,8 +153,8 @@ For manual Discover inspection, use these workflows:
    - Dashboard panel: `WI Lineage - Event Lookup`
    - Controls: choose a `Run`, then search or paste `sim-postgres_analytics-000001` in `Event ID`
    - KQL fallback: `run_id: "2026-05-02T153200Z_postgres_analytics" and event_id: "sim-postgres_analytics-000001"`
-   - Pin fields: `event_id`, `normalized_query_text`, `raw_query_text`, `matched_primitives`, `template_id`, `profile_id`, `recommendation_ids`
-   - Expected: the pasted event ID shows one raw query, its normalized query text, extracted primitives, and forward links.
+   - Pin fields: `event_id`, `latency_ms`, `response_bytes`, `result_count`, `normalized_query_text`, `raw_query_text`, `matched_primitives`, `template_id`, `profile_id`, `recommendation_ids`
+   - Expected: the pasted event ID shows one raw query, its response metadata, normalized query text, extracted primitives, and forward links.
 
 3. Template evidence
 
@@ -155,8 +173,8 @@ For manual Discover inspection, use these workflows:
 
    - Data view: `workload-lineage-events`
    - Filter: one `event_id` from `sample_event_ids`
-   - Pin fields: `raw_query_text`, `normalized_query_text`, `matched_primitives`, `template_id`, `aggregate_window_ids`, `profile_id`, `recommendation_ids`
-   - Expected: one raw query links forward to matched primitives, its template, aggregate windows, profile, and recommendation.
+   - Pin fields: `raw_query_text`, `normalized_query_text`, `latency_ms`, `response_bytes`, `result_count`, `matched_primitives`, `template_id`, `aggregate_window_ids`, `profile_id`, `recommendation_ids`
+   - Expected: one raw query and its response metadata link forward to matched primitives, its template, aggregate windows, profile, and recommendation.
 
 6. Scenario expected -> observed
 

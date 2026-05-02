@@ -289,9 +289,14 @@ def test_simulator_ui_contains_matcher_source_column():
     assert "Tick a primitive flag" in HTML
     assert "activePrimitive" in HTML
     assert "payload.inactive" in HTML
+    assert "stopPropagation" in HTML
     assert "Generated platform query" in HTML
-    assert "Relevant matcher fields" in HTML
+    assert "Rule condition trace" in HTML
     assert "Normalized matcher input" in HTML
+    assert "highlightedJson" in HTML
+    assert "relevantMatcherPaths" in HTML
+    assert "json-line" in HTML
+    assert '" highlight"' in HTML
     assert "Primitive Rule" in HTML
     assert "Advanced source code" in HTML
     assert HTML.index("Matcher Source") < HTML.index("Scenario YAML")

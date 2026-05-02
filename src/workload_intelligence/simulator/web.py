@@ -112,6 +112,7 @@ HTML = r"""<!doctype html>
       background: #ffffff;
       font-size: 13px;
       min-height: 34px;
+      cursor: pointer;
     }
     .primitive-name {
       display: flex;
@@ -131,6 +132,7 @@ HTML = r"""<!doctype html>
     }
     .primitive.disabled {
       background: #edf1f5;
+      cursor: default;
     }
     .primitive.disabled .primitive-name,
     .primitive.disabled .primitive-description {
@@ -274,6 +276,29 @@ HTML = r"""<!doctype html>
       border-radius: 0;
       max-height: 320px;
       font-size: 12px;
+    }
+    .json-line {
+      display: block;
+      min-height: 1.45em;
+      margin: 0 -4px;
+      padding: 0 4px;
+      border-left: 3px solid transparent;
+      white-space: pre;
+    }
+    .json-line.highlight {
+      border-left-color: var(--accent);
+      background: #dff4ee;
+    }
+    .json-key {
+      color: #245b8a;
+    }
+    .json-string {
+      color: #7a3f0b;
+    }
+    .json-number,
+    .json-boolean,
+    .json-null {
+      color: #7c2d8f;
     }
     .source-empty {
       color: var(--muted);
@@ -459,22 +484,134 @@ HTML = r"""<!doctype html>
       `;
     }
 
+    function htmlSourceBlock(title, path, html) {
+      return `
+        <div class="source-block">
+          <div class="source-block-header">
+            <span>${escapeHtml(title)}</span>
+            <span>${escapeHtml(path)}</span>
+          </div>
+          <pre><code>${html}</code></pre>
+        </div>
+      `;
+    }
+
+    function relevantMatcherPaths(payload) {
+      const paths = new Set();
+      for (const rule of payload.sample.relevant_matcher_fields || []) {
+        for (const condition of rule.conditions || []) {
+          for (const field of condition.fields || []) {
+            if (field.path && field.path !== "$") paths.add(field.path);
+          }
+        }
+      }
+      return paths;
+    }
+
+    function jsonToken(value) {
+      if (typeof value === "string") {
+        return `<span class="json-string">${escapeHtml(JSON.stringify(value))}</span>`;
+      }
+      if (typeof value === "number") {
+        return `<span class="json-number">${escapeHtml(String(value))}</span>`;
+      }
+      if (typeof value === "boolean") {
+        return `<span class="json-boolean">${value}</span>`;
+      }
+      if (value === null) {
+        return '<span class="json-null">null</span>';
+      }
+      return escapeHtml(JSON.stringify(value));
+    }
+
+    function inlineJson(value) {
+      return escapeHtml(JSON.stringify(value));
+    }
+
+    function jsonLine(content, highlighted = false) {
+      return `<span class="json-line${highlighted ? " highlight" : ""}">${content}</span>`;
+    }
+
+    function renderJsonProperty(key, value, path, indent, isLast, highlightPaths) {
+      const pad = " ".repeat(indent);
+      const comma = isLast ? "" : ",";
+      const keyHtml = `<span class="json-key">${escapeHtml(JSON.stringify(key))}</span>: `;
+      const highlighted = highlightPaths.has(path);
+      if (highlighted) {
+        return [jsonLine(`${pad}${keyHtml}${inlineJson(value)}${comma}`, true)];
+      }
+      if (Array.isArray(value)) {
+        if (!value.length) return [jsonLine(`${pad}${keyHtml}[]${comma}`)];
+        const lines = [jsonLine(`${pad}${keyHtml}[`)];
+        value.forEach((item, index) => {
+          lines.push(...renderJsonValue(item, `${path}.${index}`, indent + 2, index === value.length - 1, highlightPaths));
+        });
+        lines.push(jsonLine(`${pad}]${comma}`));
+        return lines;
+      }
+      if (value && typeof value === "object") {
+        const entries = Object.entries(value);
+        if (!entries.length) return [jsonLine(`${pad}${keyHtml}{}${comma}`)];
+        const lines = [jsonLine(`${pad}${keyHtml}{`)];
+        entries.forEach(([childKey, childValue], index) => {
+          lines.push(...renderJsonProperty(childKey, childValue, `${path}.${childKey}`, indent + 2, index === entries.length - 1, highlightPaths));
+        });
+        lines.push(jsonLine(`${pad}}${comma}`));
+        return lines;
+      }
+      return [jsonLine(`${pad}${keyHtml}${jsonToken(value)}${comma}`)];
+    }
+
+    function renderJsonValue(value, path, indent, isLast, highlightPaths) {
+      const pad = " ".repeat(indent);
+      const comma = isLast ? "" : ",";
+      if (Array.isArray(value)) {
+        if (!value.length) return [jsonLine(`${pad}[]${comma}`, highlightPaths.has(path))];
+        const highlighted = highlightPaths.has(path);
+        if (highlighted) return [jsonLine(`${pad}${inlineJson(value)}${comma}`, true)];
+        const lines = [jsonLine(`${pad}[`)];
+        value.forEach((item, index) => {
+          lines.push(...renderJsonValue(item, `${path}.${index}`, indent + 2, index === value.length - 1, highlightPaths));
+        });
+        lines.push(jsonLine(`${pad}]${comma}`));
+        return lines;
+      }
+      if (value && typeof value === "object") {
+        const highlighted = highlightPaths.has(path);
+        if (highlighted) return [jsonLine(`${pad}${inlineJson(value)}${comma}`, true)];
+        const entries = Object.entries(value);
+        if (!entries.length) return [jsonLine(`${pad}{}${comma}`)];
+        const lines = [jsonLine(`${pad}{`)];
+        entries.forEach(([key, childValue], index) => {
+          lines.push(...renderJsonProperty(key, childValue, `${path}.${key}`, indent + 2, index === entries.length - 1, highlightPaths));
+        });
+        lines.push(jsonLine(`${pad}}${comma}`));
+        return lines;
+      }
+      return [jsonLine(`${pad}${jsonToken(value)}${comma}`, highlightPaths.has(path))];
+    }
+
+    function highlightedJson(value, highlightPaths) {
+      return renderJsonValue(value, "$", 0, true, highlightPaths).join("");
+    }
+
     function renderMatcherSource(payload) {
       const box = document.getElementById("matcherSource");
+      const highlightPaths = relevantMatcherPaths(payload);
       const generatedOperation = sourceBlock(
         "Generated platform query",
         "simulator runtime sample",
         JSON.stringify(payload.sample.generated_operation, null, 2)
       );
       const relevantFields = sourceBlock(
-        `Relevant matcher fields for ${payload.primitive}`,
+        `Rule condition trace for ${payload.primitive}`,
         "derived from primitive rule conditions",
         JSON.stringify(payload.sample.relevant_matcher_fields, null, 2)
       );
-      const normalizedInput = sourceBlock(
+      const normalizedInput = htmlSourceBlock(
         "Normalized matcher input",
-        "classifier input object",
-        JSON.stringify(payload.sample.normalized_matcher_input, null, 2)
+        "highlighted fields are read by the selected primitive rule",
+        highlightedJson(payload.sample.normalized_matcher_input, highlightPaths)
       );
       const selectedSignal = sourceBlock(
         `Observed signal: ${payload.primitive}`,
@@ -510,18 +647,25 @@ HTML = r"""<!doctype html>
       box.innerHTML = "";
       if (!capabilities || !platform) return;
       for (const primitive of capabilities.platforms[platform].primitives) {
-        const label = document.createElement("label");
-        label.className = "primitive" + (primitive.supported ? "" : " disabled");
-        label.dataset.primitive = primitive.name;
-        if (primitive.reason) label.title = primitive.reason;
+        const item = document.createElement("div");
+        item.className = "primitive" + (primitive.supported ? "" : " disabled");
+        item.dataset.primitive = primitive.name;
+        if (primitive.reason) item.title = primitive.reason;
         const input = document.createElement("input");
         input.type = "checkbox";
         input.value = primitive.name;
         input.disabled = !primitive.supported;
+        input.addEventListener("click", event => event.stopPropagation());
         input.addEventListener("change", () => {
           selectedPrimitive = input.checked ? primitive.name : null;
           renderPrimitiveSelection();
           buildYaml();
+          loadMatcherSource();
+        });
+        item.addEventListener("click", () => {
+          if (!input.checked || input.disabled) return;
+          selectedPrimitive = primitive.name;
+          renderPrimitiveSelection();
           loadMatcherSource();
         });
         const name = document.createElement("span");
@@ -531,9 +675,9 @@ HTML = r"""<!doctype html>
         const description = document.createElement("span");
         description.className = "primitive-description";
         description.textContent = primitive.description || primitive.reason || "";
-        label.appendChild(name);
-        label.appendChild(description);
-        box.appendChild(label);
+        item.appendChild(name);
+        item.appendChild(description);
+        box.appendChild(item);
       }
       if (!selectedPrimitive || !checkedPrimitives().includes(selectedPrimitive)) {
         selectedPrimitive = activePrimitive();

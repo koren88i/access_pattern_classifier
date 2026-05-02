@@ -13,6 +13,7 @@ Last updated: 2026-05-02
 - Done: Optional local Elasticsearch/Kibana sink for simulator pipeline outputs.
 - Done: Kibana lineage export views for recommendation backtrace, template evidence, event trace, and simulator validation.
 - Done: Simulator query flags are backed by capability SSOT, primitive descriptions come from ontology SSOT, and response-derived signals are separated from query-shape controls.
+- Done: Simulator Matcher Source inspector shows generated query, rule condition trace, highlighted normalized matcher fields, primitive rule YAML, and advanced source code.
 - Verified: `python -m pytest` passes.
 - Next: Build saved Kibana dashboards/searches, broaden simulator scenario coverage, and expand Sprint 4 recommendation/parser support.
 
@@ -384,7 +385,7 @@ rules:
 
 Primitive names and descriptions must be declared in `primitive-ontology.yaml` before they appear in extraction rules or simulator capabilities. Platform-specific detection details belong in `primitive-rules.yaml`; for example `redis_get_by_key` should normally be a rule id that emits the ontology primitive `key_lookup`, not a new primitive.
 
-Simulator query-shape controls are narrower than the ontology. `simulator-capabilities.yaml` declares which ontology primitives can be synthesized as query flags for each platform. Response-derived operational signals such as `large_result` and `low_latency_sensitive` are driven by response metadata distributions and are shown separately from query flags.
+Simulator query-shape controls are narrower than the ontology. `simulator-capabilities.yaml` declares which ontology primitives can be synthesized as query flags for each platform. Response-derived operational signals such as `large_result` and `low_latency_sensitive` are driven by response metadata distributions and are shown separately from query flags. Response metadata is event evidence, not a query-shape primitive: it can affect primitive extraction, latency/data-weighted aggregation, access-pattern scores, recommendations, and dashboard rows, while event-level Kibana lineage views expose `latency_ms`, `response_bytes`, and `result_count` directly.
 
 ---
 
@@ -566,6 +567,8 @@ Later add cost-weighted views:
 primitive_profile_by_latency_cost[p] =
   sum(operation.primitive_signals[p].signal_weight * latency_ms) / sum(latency_ms)
 ```
+
+Response-volume weighting follows the same idea with `response_bytes`, and `result_count` can trigger response-derived primitive rules such as `large_result`. The basic CLI dashboard renders the final dominant pattern and recommendation, not the raw response metadata columns; event-level lineage exports keep those fields inspectable.
 
 This is important because:
 
