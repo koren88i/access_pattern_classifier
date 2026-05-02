@@ -1,0 +1,129 @@
+response_metadata:
+  distributions:
+    - name: fixed
+      display_name: Fixed
+      fields:
+        - name: value
+          display_name: Value
+    - name: uniform
+      display_name: Uniform
+      fields:
+        - name: min
+          display_name: Min
+        - name: max
+          display_name: Max
+    - name: normal
+      display_name: Normal
+      fields:
+        - name: mean
+          display_name: Mean
+        - name: stddev
+          display_name: Stddev
+        - name: min
+          display_name: Min
+        - name: max
+          display_name: Max
+  metrics:
+    - name: latency_ms
+      display_name: Latency ms
+      default_distribution: normal
+      defaults:
+        fixed: { distribution: fixed, value: 80 }
+        uniform: { distribution: uniform, min: 10, max: 500 }
+        normal: { distribution: normal, mean: 80, stddev: 20, min: 10, max: 500 }
+    - name: response_bytes
+      display_name: Response bytes
+      default_distribution: uniform
+      defaults:
+        fixed: { distribution: fixed, value: 10000 }
+        uniform: { distribution: uniform, min: 1000, max: 20000 }
+        normal: { distribution: normal, mean: 10000, stddev: 3000, min: 1000, max: 50000 }
+    - name: result_count
+      display_name: Result count
+      default_distribution: uniform
+      defaults:
+        fixed: { distribution: fixed, value: 25 }
+        uniform: { distribution: uniform, min: 1, max: 50 }
+        normal: { distribution: normal, mean: 25, stddev: 10, min: 1, max: 100 }
+
+platforms:
+  postgres:
+    display_name: PostgreSQL
+    supported_primitives:
+      - key_lookup
+      - range_lookup
+      - multi_filter
+      - scan
+      - aggregation
+      - sort_paginate
+      - point_write
+      - update_write
+      - time_series
+      - text_search
+    unsupported_primitives:
+      append_write: "PostgreSQL append-write synthesis is not modeled yet."
+      batch_write: "PostgreSQL batch-write synthesis is not modeled yet."
+      bulk_read: "PostgreSQL bulk-read synthesis is not modeled yet."
+      vector_search: "PostgreSQL vector-search syntax is not modeled yet."
+      geo_search: "PostgreSQL geospatial syntax is not modeled yet."
+      large_result: "Large-result behavior is derived from response.result_count distributions, not query syntax."
+      low_latency_sensitive: "Low-latency sensitivity is derived from response metadata."
+      ttl_or_expire_usage: "TTL/expire semantics do not apply to PostgreSQL."
+    response_derived_primitives:
+      - large_result
+      - low_latency_sensitive
+    unsupported_combinations:
+      - primitives: [point_write, update_write]
+        reason: "A single synthetic PostgreSQL operation cannot be both INSERT and UPDATE."
+
+  elasticsearch:
+    display_name: Elasticsearch
+    supported_primitives:
+      - key_lookup
+      - range_lookup
+      - multi_filter
+      - scan
+      - aggregation
+      - sort_paginate
+      - bulk_read
+      - time_series
+      - text_search
+      - vector_search
+      - geo_search
+    unsupported_primitives:
+      point_write: "Elasticsearch write synthesis is not modeled yet."
+      append_write: "Elasticsearch append-write synthesis is not modeled yet."
+      update_write: "Elasticsearch update synthesis is not modeled yet."
+      batch_write: "Elasticsearch batch-write synthesis is not modeled yet."
+      large_result: "Large-result behavior is derived from response.result_count distributions, not query syntax."
+      low_latency_sensitive: "Low-latency sensitivity is derived from response metadata."
+      ttl_or_expire_usage: "TTL/expire semantics do not apply to Elasticsearch."
+    response_derived_primitives:
+      - large_result
+      - low_latency_sensitive
+
+  redis:
+    display_name: Redis
+    supported_primitives:
+      - key_lookup
+      - point_write
+      - batch_write
+      - ttl_or_expire_usage
+    unsupported_primitives:
+      range_lookup: "Redis range-query synthesis is not modeled yet."
+      multi_filter: "Redis multi-filter syntax does not apply to key commands."
+      scan: "Redis SCAN synthesis is not modeled yet."
+      aggregation: "Redis aggregation synthesis is not modeled yet."
+      sort_paginate: "Redis sort/pagination synthesis is not modeled yet."
+      append_write: "Redis append-write synthesis is not modeled yet."
+      update_write: "Redis update-write synthesis is not modeled yet."
+      bulk_read: "Redis bulk-read primitive extraction is not modeled yet."
+      time_series: "Redis time-series module syntax is not modeled yet."
+      text_search: "Redis search module syntax is not modeled yet."
+      vector_search: "Redis vector-search syntax is not modeled yet."
+      geo_search: "Redis geospatial syntax is not modeled yet."
+      large_result: "Large-result behavior is derived from response.result_count distributions, not Redis command syntax."
+      low_latency_sensitive: "Low-latency sensitivity is derived from response metadata."
+    response_derived_primitives:
+      - large_result
+      - low_latency_sensitive

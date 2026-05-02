@@ -1,0 +1,104 @@
+RawUsageEvent:
+  type: object
+  required:
+    - event_id
+    - timestamp
+    - identity
+    - platform
+    - operation
+    - response
+  properties:
+    event_id:
+      type: string
+    timestamp:
+      type: datetime
+    identity:
+      type: object
+      required:
+        - system_id
+      properties:
+        system_id:
+          type: string
+        customer_id:
+          type: string
+          optional: true
+        user_id:
+          type: string
+          optional: true
+        client_id:
+          type: string
+          optional: true
+        service_name:
+          type: string
+          optional: true
+        trace_id:
+          type: string
+          optional: true
+        session_id:
+          type: string
+          optional: true
+    platform:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          enum:
+            - elasticsearch
+            - redis
+            - mongo
+            - postgres
+            - cassandra
+            - s3
+        database:
+          type: string
+          optional: true
+        index_or_table:
+          type: string
+          optional: true
+    operation:
+      type: object
+      required:
+        - command
+      properties:
+        method:
+          type: string
+          optional: true
+        command:
+          type: string
+        endpoint:
+          type: string
+          optional: true
+        raw_query:
+          type:
+            - object
+            - string
+        normalized_query:
+          type:
+            - object
+            - string
+          optional: true
+    request:
+      type: object
+      optional: true
+      properties:
+        request_bytes:
+          type: number
+          optional: true
+    response:
+      type: object
+      required:
+        - latency_ms
+      properties:
+        status_code:
+          type: number
+          optional: true
+        latency_ms:
+          type: number
+        response_bytes:
+          type: number
+          optional: true
+        result_count:
+          type: number
+          optional: true
+

@@ -1,0 +1,306 @@
+rules:
+  - id: elastic_aggregation_aggs
+    platform: elasticsearch
+    primitive: aggregation
+    when:
+      path_exists: "$.operation.raw_query.aggs"
+    signal_weight: 0.9
+    rule_confidence: 0.95
+    evidence: "Elasticsearch query contains aggs clause"
+
+  - id: elastic_text_match
+    platform: elasticsearch
+    primitive: text_search
+    when:
+      body_contains_any_key:
+        - match
+        - multi_match
+        - query_string
+    signal_weight: 0.85
+    rule_confidence: 0.9
+    evidence: "Elasticsearch query contains text-search query type"
+
+  - id: elastic_time_range
+    platform: elasticsearch
+    primitive: time_series
+    when:
+      range_filter_field_matches:
+        - "@timestamp"
+        - timestamp
+        - time
+        - created_at
+    signal_weight: 0.7
+    rule_confidence: 0.85
+    evidence: "Range filter over timestamp-like field"
+
+  - id: elastic_range_lookup
+    platform: elasticsearch
+    primitive: range_lookup
+    when:
+      body_contains_any_key:
+        - range
+    signal_weight: 0.55
+    rule_confidence: 0.8
+    evidence: "Elasticsearch query contains range clause"
+
+  - id: elastic_term_key_lookup
+    platform: elasticsearch
+    primitive: key_lookup
+    when:
+      term_filter_exists: true
+    signal_weight: 0.4
+    rule_confidence: 0.8
+    evidence: "Elasticsearch query contains term or ids lookup"
+
+  - id: elastic_multi_filter
+    platform: elasticsearch
+    primitive: multi_filter
+    when:
+      multi_filter_exists: 2
+    signal_weight: 0.65
+    rule_confidence: 0.8
+    evidence: "Elasticsearch bool query contains multiple filters"
+
+  - id: elastic_sort_paginate
+    platform: elasticsearch
+    primitive: sort_paginate
+    when:
+      any_path_exists:
+        - "$.operation.raw_query.sort"
+        - "$.operation.raw_query.from"
+        - "$.operation.raw_query.search_after"
+    signal_weight: 0.55
+    rule_confidence: 0.75
+    evidence: "Elasticsearch query uses sorting or pagination"
+
+  - id: elastic_scan_match_all
+    platform: elasticsearch
+    primitive: scan
+    when:
+      body_contains_any_key:
+        - match_all
+    signal_weight: 0.7
+    rule_confidence: 0.75
+    evidence: "Elasticsearch query contains match_all scan shape"
+
+  - id: elastic_vector_search
+    platform: elasticsearch
+    primitive: vector_search
+    when:
+      body_contains_any_key:
+        - knn
+        - script_score
+    signal_weight: 0.85
+    rule_confidence: 0.8
+    evidence: "Elasticsearch query contains vector-search shape"
+
+  - id: elastic_geo_search
+    platform: elasticsearch
+    primitive: geo_search
+    when:
+      body_contains_any_key:
+        - geo_distance
+        - geo_bounding_box
+        - geo_shape
+    signal_weight: 0.85
+    rule_confidence: 0.85
+    evidence: "Elasticsearch query contains geospatial query shape"
+
+  - id: elastic_large_result
+    platform: elasticsearch
+    primitive: large_result
+    when:
+      result_count_gte: 1000
+    signal_weight: 0.8
+    rule_confidence: 0.9
+    evidence: "Elasticsearch response returned at least 1000 results"
+
+  - id: redis_key_reads
+    platform: redis
+    primitive: key_lookup
+    when:
+      command_in:
+        - GET
+        - MGET
+        - EXISTS
+        - HGET
+        - HGETALL
+    signal_weight: 0.9
+    rule_confidence: 0.95
+    evidence: "Redis command is key-based read"
+
+  - id: redis_point_write
+    platform: redis
+    primitive: point_write
+    when:
+      command_in:
+        - SET
+        - SETEX
+        - PSETEX
+        - HSET
+    signal_weight: 0.8
+    rule_confidence: 0.9
+    evidence: "Redis command is point write"
+
+  - id: redis_key_writes
+    platform: redis
+    primitive: key_lookup
+    when:
+      command_in:
+        - SET
+        - SETEX
+        - PSETEX
+        - HSET
+    signal_weight: 0.7
+    rule_confidence: 0.85
+    evidence: "Redis write addresses a specific key"
+
+  - id: redis_ttl_usage
+    platform: redis
+    primitive: ttl_or_expire_usage
+    when:
+      ttl_or_expire_signal: true
+    signal_weight: 1.0
+    rule_confidence: 0.95
+    evidence: "Redis operation includes TTL or expire semantics"
+
+  - id: redis_batch_read
+    platform: redis
+    primitive: batch_write
+    when:
+      command_in:
+        - MSET
+        - HMSET
+    signal_weight: 0.75
+    rule_confidence: 0.85
+    evidence: "Redis command writes multiple keys or fields"
+
+  - id: postgres_select_key_lookup
+    platform: postgres
+    primitive: key_lookup
+    when:
+      sql_command_in:
+        - SELECT
+      sql_equality_field_matches:
+        - id
+        - customer_id
+        - user_id
+        - order_id
+    signal_weight: 0.75
+    rule_confidence: 0.8
+    evidence: "PostgreSQL SELECT filters by identifier-like equality predicate"
+
+  - id: postgres_point_insert
+    platform: postgres
+    primitive: point_write
+    when:
+      sql_command_in:
+        - INSERT
+    signal_weight: 0.75
+    rule_confidence: 0.8
+    evidence: "PostgreSQL INSERT writes rows into one table"
+
+  - id: postgres_update_write
+    platform: postgres
+    primitive: update_write
+    when:
+      sql_command_in:
+        - UPDATE
+    signal_weight: 0.75
+    rule_confidence: 0.8
+    evidence: "PostgreSQL UPDATE mutates existing rows"
+
+  - id: postgres_aggregation_group_by
+    platform: postgres
+    primitive: aggregation
+    when:
+      sql_command_in:
+        - SELECT
+      sql_has_any_feature:
+        - has_group_by
+        - has_aggregate_function
+    signal_weight: 0.9
+    rule_confidence: 0.85
+    evidence: "PostgreSQL SELECT contains GROUP BY or aggregate function"
+
+  - id: postgres_time_range
+    platform: postgres
+    primitive: time_series
+    when:
+      sql_range_field_matches:
+        - created_at
+        - updated_at
+        - timestamp
+        - event_time
+        - time
+    signal_weight: 0.7
+    rule_confidence: 0.75
+    evidence: "PostgreSQL WHERE clause ranges over timestamp-like field"
+
+  - id: postgres_range_lookup
+    platform: postgres
+    primitive: range_lookup
+    when:
+      sql_range_field_matches:
+        - created_at
+        - updated_at
+        - timestamp
+        - event_time
+        - time
+        - amount_cents
+        - price
+        - total_cents
+    signal_weight: 0.55
+    rule_confidence: 0.75
+    evidence: "PostgreSQL WHERE clause contains a range predicate"
+
+  - id: postgres_multi_filter
+    platform: postgres
+    primitive: multi_filter
+    when:
+      sql_where_condition_count_gte: 2
+    signal_weight: 0.65
+    rule_confidence: 0.75
+    evidence: "PostgreSQL WHERE clause contains multiple predicates"
+
+  - id: postgres_sort_paginate
+    platform: postgres
+    primitive: sort_paginate
+    when:
+      sql_has_any_feature:
+        - has_order_by
+        - has_limit
+    signal_weight: 0.45
+    rule_confidence: 0.7
+    evidence: "PostgreSQL SELECT uses ORDER BY or LIMIT"
+
+  - id: postgres_text_search_predicate
+    platform: postgres
+    primitive: text_search
+    when:
+      sql_command_in:
+        - SELECT
+      sql_has_any_feature:
+        - has_like_search
+        - has_full_text_search
+    signal_weight: 0.85
+    rule_confidence: 0.8
+    evidence: "PostgreSQL SELECT contains LIKE/ILIKE or full-text search predicate"
+
+  - id: postgres_scan_large_result
+    platform: postgres
+    primitive: scan
+    when:
+      result_count_gte: 1000
+    signal_weight: 0.65
+    rule_confidence: 0.7
+    evidence: "PostgreSQL query returned a broad result set"
+
+  - id: postgres_large_result
+    platform: postgres
+    primitive: large_result
+    when:
+      result_count_gte: 1000
+    signal_weight: 0.8
+    rule_confidence: 0.85
+    evidence: "PostgreSQL response returned at least 1000 rows"

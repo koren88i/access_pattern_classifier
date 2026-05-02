@@ -1,0 +1,76 @@
+AccessPatterns:
+  oltp:
+    description: Transactional application database usage.
+    positive_signals:
+      - key_lookup
+      - point_write
+      - update_write
+      - low result count
+      - low latency
+    negative_signals:
+      - heavy aggregation
+      - large scans
+      - text/vector/geo dominance
+  high_throughput_state:
+    description: Predictable state access at high volume.
+    positive_signals:
+      - key_lookup
+      - point_write
+      - batch_write
+      - high request rate
+      - stable templates
+    negative_signals:
+      - joins
+      - ad-hoc filters
+      - aggregations
+  cache:
+    description: Repeated key-based ephemeral access.
+    positive_signals:
+      - key_lookup
+      - high repetition
+      - ttl_or_expire_usage
+      - low latency
+    negative_signals:
+      - durable retention
+      - complex queries
+  analytical_serving:
+    description: Repeated analytical queries with SLA expectations.
+    positive_signals:
+      - aggregation
+      - time_series
+      - multi_filter
+      - stable templates
+      - high concurrency
+    negative_signals:
+      - high text_search
+      - low repetition
+      - complex ad-hoc joins
+  ad_hoc_analytics:
+    description: Exploratory analytical access with changing query shapes.
+    positive_signals:
+      - scan
+      - aggregation
+      - low template stability
+      - large result sets
+    negative_signals:
+      - high repetition
+      - strict low-latency behavior
+  search_text:
+    description: Full-text search workload.
+    positive_signals:
+      - text_search
+  search_vector:
+    description: Vector similarity search workload.
+    positive_signals:
+      - vector_search
+  search_geo:
+    description: Geospatial search workload.
+    positive_signals:
+      - geo_search
+  blob:
+    description: Key-based access to large opaque objects.
+    positive_signals:
+      - key_lookup
+      - large payload
+      - no filtering
+

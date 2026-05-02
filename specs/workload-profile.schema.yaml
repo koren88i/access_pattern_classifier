@@ -1,0 +1,78 @@
+WorkloadProfile:
+  profile_id: string
+  scope:
+    system_id: string
+    customer_id: optional string
+    platform: string
+    database_or_index: optional string
+    window_start: datetime
+    window_end: datetime
+  volume:
+    request_count: number
+    unique_template_count: number
+    top_templates_coverage: number
+  latency:
+    avg_latency_ms: number
+    p95_latency_ms: number
+    max_latency_ms: number
+  primitive_profile:
+    key_lookup: number
+    range_lookup: number
+    multi_filter: number
+    aggregation: number
+    scan: number
+    sort_paginate: number
+    point_write: number
+    append_write: number
+    batch_write: number
+    update_write: number
+    bulk_read: number
+    time_series: number
+    text_search: number
+    vector_search: number
+    geo_search: number
+    large_result: number
+    low_latency_sensitive: number
+    ttl_or_expire_usage: number
+  primitive_profiles:
+    request_count: PrimitiveProfile
+    latency_cost: PrimitiveProfile
+    response_volume: PrimitiveProfile
+    unique_systems: PrimitiveProfile
+    unique_customers: PrimitiveProfile
+  access_pattern_scores:
+    oltp: number
+    cache: number
+    analytical_serving: number
+    ad_hoc_analytics: number
+    search_text: number
+    unknown_mixed: number
+  dominant_patterns:
+    type: list
+    item:
+      pattern: string
+      score: number
+      confidence: number
+  evidence:
+    top_templates: list
+    explanation: list
+
+PrimitiveProfile:
+  key_lookup: number
+  range_lookup: number
+  multi_filter: number
+  aggregation: number
+  scan: number
+  sort_paginate: number
+  point_write: number
+  append_write: number
+  batch_write: number
+  update_write: number
+  bulk_read: number
+  time_series: number
+  text_search: number
+  vector_search: number
+  geo_search: number
+  large_result: number
+  low_latency_sensitive: number
+  ttl_or_expire_usage: number

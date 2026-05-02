@@ -1,0 +1,19 @@
+name: redis_durable_state
+seed: 12
+target:
+  platform: redis
+  system_id: job-state-api
+  customer_id: acme
+  database_or_index: state
+time_range:
+  start: "2026-04-30T00:00:00Z"
+  end: "2026-05-01T00:00:00Z"
+events: 100
+responses:
+  latency_ms: { distribution: normal, mean: 10, stddev: 3, min: 1, max: 40 }
+  response_bytes: { distribution: uniform, min: 100, max: 3000 }
+  result_count: { distribution: fixed, value: 1 }
+query_shapes:
+  - name: set_state
+    share: 100
+    primitives: [key_lookup, point_write]

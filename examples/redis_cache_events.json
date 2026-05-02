@@ -1,0 +1,43 @@
+[
+  {
+    "event_id": "evt-redis-cache-1",
+    "timestamp": "2026-04-30T11:00:00Z",
+    "identity": {
+      "system_id": "session-api"
+    },
+    "platform": {
+      "type": "redis"
+    },
+    "operation": {
+      "command": "GET",
+      "raw_query": "GET session:123",
+      "key": "session:123"
+    },
+    "response": {
+      "status_code": 200,
+      "latency_ms": 4,
+      "response_bytes": 800
+    }
+  },
+  {
+    "event_id": "evt-redis-cache-2",
+    "timestamp": "2026-04-30T11:00:01Z",
+    "identity": {
+      "system_id": "session-api"
+    },
+    "platform": {
+      "type": "redis"
+    },
+    "operation": {
+      "command": "SETEX",
+      "raw_query": "SETEX session:123 900 payload",
+      "key": "session:123"
+    },
+    "response": {
+      "status_code": 200,
+      "latency_ms": 5,
+      "response_bytes": 2
+    }
+  }
+]
+

@@ -1,0 +1,43 @@
+PrimitiveIntent:
+  access_shape:
+    - key_lookup
+    - range_lookup
+    - multi_filter
+    - scan
+    - aggregation
+    - sort_paginate
+  data_interaction:
+    - point_write
+    - append_write
+    - update_write
+    - batch_write
+    - bulk_read
+  semantics:
+    - time_series
+    - text_search
+    - vector_search
+    - geo_search
+  operational_shape:
+    - large_result
+    - low_latency_sensitive
+    - ttl_or_expire_usage
+
+PrimitiveDescriptions:
+  key_lookup: "Reads one or a small set of records by stable identifier or key."
+  range_lookup: "Reads records by comparing a field to a bounded or unbounded value range."
+  multi_filter: "Applies multiple predicates or filters in the same operation."
+  scan: "Reads a broad portion of a dataset instead of targeting narrow keys."
+  aggregation: "Computes grouped, counted, summed, averaged, or otherwise reduced results."
+  sort_paginate: "Orders results, limits rows, offsets pages, or uses cursor-style pagination."
+  point_write: "Writes one record, key, document, or row in a single operation."
+  append_write: "Adds new data to an append-oriented structure or stream."
+  update_write: "Mutates existing records, documents, rows, or fields."
+  batch_write: "Writes multiple records, keys, documents, or fields in one operation."
+  bulk_read: "Reads many records or documents in one operation or batch shape."
+  time_series: "Uses timestamp-like fields or time windows as part of the operation."
+  text_search: "Searches text with match, LIKE, full-text, or query-string semantics."
+  vector_search: "Finds similar items using vector or embedding search semantics."
+  geo_search: "Filters or ranks data using geographic distance, bounds, or shapes."
+  large_result: "Returns a large number of rows, documents, keys, or result items."
+  low_latency_sensitive: "Shows latency sensitivity through very low response-time expectations."
+  ttl_or_expire_usage: "Uses expiration, TTL, or time-bound key lifecycle behavior."

@@ -1,0 +1,19 @@
+name: postgres_text_search
+seed: 42
+target:
+  platform: postgres
+  system_id: catalog-api
+  customer_id: acme
+  database_or_index: catalog_items
+time_range:
+  start: "2026-04-30T00:00:00Z"
+  end: "2026-05-01T00:00:00Z"
+events: 100
+responses:
+  latency_ms: { distribution: normal, mean: 85, stddev: 12, min: 30, max: 250 }
+  response_bytes: { distribution: uniform, min: 10000, max: 22000 }
+  result_count: { distribution: uniform, min: 10, max: 40 }
+query_shapes:
+  - name: catalog_search
+    share: 100
+    primitives: [text_search, sort_paginate]

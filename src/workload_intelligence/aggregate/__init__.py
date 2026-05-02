@@ -1,0 +1,2 @@
+"""Window aggregation."""
+

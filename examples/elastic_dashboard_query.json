@@ -1,0 +1,29 @@
+{
+  "query": {
+    "bool": {
+      "filter": [
+        {
+          "term": {
+            "customer_id": 123
+          }
+        },
+        {
+          "range": {
+            "@timestamp": {
+              "gte": "now-1h",
+              "lte": "now"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "aggs": {
+    "by_status": {
+      "terms": {
+        "field": "status"
+      }
+    }
+  }
+}
+

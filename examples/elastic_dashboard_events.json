@@ -1,0 +1,111 @@
+[
+  {
+    "event_id": "evt-elastic-dashboard-1",
+    "timestamp": "2026-04-30T09:00:00Z",
+    "identity": {
+      "system_id": "fraud-service",
+      "customer_id": "acme"
+    },
+    "platform": {
+      "type": "elasticsearch",
+      "index_or_table": "transactions"
+    },
+    "operation": {
+      "method": "POST",
+      "command": "search",
+      "endpoint": "/transactions/_search",
+      "raw_query": {
+        "query": {
+          "bool": {
+            "filter": [
+              {
+                "term": {
+                  "customer_id": 123
+                }
+              },
+              {
+                "range": {
+                  "@timestamp": {
+                    "gte": "now-1h",
+                    "lte": "now"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "aggs": {
+          "by_status": {
+            "terms": {
+              "field": "status"
+            }
+          }
+        }
+      }
+    },
+    "request": {
+      "request_bytes": 260
+    },
+    "response": {
+      "status_code": 200,
+      "latency_ms": 140,
+      "response_bytes": 9000,
+      "result_count": 20
+    }
+  },
+  {
+    "event_id": "evt-elastic-dashboard-2",
+    "timestamp": "2026-04-30T09:03:00Z",
+    "identity": {
+      "system_id": "fraud-service",
+      "customer_id": "acme"
+    },
+    "platform": {
+      "type": "elasticsearch",
+      "index_or_table": "transactions"
+    },
+    "operation": {
+      "method": "POST",
+      "command": "search",
+      "endpoint": "/transactions/_search",
+      "raw_query": {
+        "query": {
+          "bool": {
+            "filter": [
+              {
+                "term": {
+                  "customer_id": 456
+                }
+              },
+              {
+                "range": {
+                  "@timestamp": {
+                    "gte": "now-2h",
+                    "lte": "now"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "aggs": {
+          "by_status": {
+            "terms": {
+              "field": "status"
+            }
+          }
+        }
+      }
+    },
+    "request": {
+      "request_bytes": 262
+    },
+    "response": {
+      "status_code": 200,
+      "latency_ms": 165,
+      "response_bytes": 9500,
+      "result_count": 18
+    }
+  }
+]
+

@@ -1,0 +1,54 @@
+[
+  {
+    "event_id": "evt-postgres-search-1",
+    "timestamp": "2026-04-30T14:00:00Z",
+    "identity": {
+      "system_id": "catalog-api",
+      "customer_id": "acme"
+    },
+    "platform": {
+      "type": "postgres",
+      "database": "catalog",
+      "index_or_table": "catalog_items"
+    },
+    "operation": {
+      "command": "SELECT",
+      "raw_query": "SELECT id, title, updated_at FROM catalog_items WHERE title ILIKE '%running shoes%' ORDER BY updated_at DESC LIMIT 20"
+    },
+    "request": {
+      "request_bytes": 160
+    },
+    "response": {
+      "status_code": 200,
+      "latency_ms": 85,
+      "response_bytes": 14200,
+      "result_count": 20
+    }
+  },
+  {
+    "event_id": "evt-postgres-search-2",
+    "timestamp": "2026-04-30T14:05:00Z",
+    "identity": {
+      "system_id": "catalog-api",
+      "customer_id": "acme"
+    },
+    "platform": {
+      "type": "postgres",
+      "database": "catalog",
+      "index_or_table": "catalog_items"
+    },
+    "operation": {
+      "command": "SELECT",
+      "raw_query": "SELECT id, title, updated_at FROM catalog_items WHERE title ILIKE '%winter coat%' ORDER BY updated_at DESC LIMIT 20"
+    },
+    "request": {
+      "request_bytes": 158
+    },
+    "response": {
+      "status_code": 200,
+      "latency_ms": 92,
+      "response_bytes": 15100,
+      "result_count": 20
+    }
+  }
+]

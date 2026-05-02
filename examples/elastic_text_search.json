@@ -1,0 +1,41 @@
+[
+  {
+    "event_id": "evt-elastic-text-1",
+    "timestamp": "2026-04-30T10:00:00Z",
+    "identity": {
+      "system_id": "catalog-search"
+    },
+    "platform": {
+      "type": "elasticsearch",
+      "index_or_table": "products"
+    },
+    "operation": {
+      "method": "POST",
+      "command": "search",
+      "endpoint": "/products/_search",
+      "raw_query": {
+        "query": {
+          "multi_match": {
+            "query": "wireless headphones",
+            "fields": [
+              "title",
+              "description"
+            ]
+          }
+        },
+        "sort": [
+          {
+            "_score": "desc"
+          }
+        ]
+      }
+    },
+    "response": {
+      "status_code": 200,
+      "latency_ms": 45,
+      "response_bytes": 12000,
+      "result_count": 10
+    }
+  }
+]
+

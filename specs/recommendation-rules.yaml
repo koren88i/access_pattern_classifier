@@ -1,0 +1,73 @@
+rules:
+  - id: elastic_as_analytical_serving
+    when:
+      scope.platform: elasticsearch
+      access_pattern_scores.analytical_serving: "> 0.60"
+      access_pattern_scores.search_text: "< 0.20"
+    then:
+      type: technology_mismatch_candidate
+      recommendation: "Evaluate analytical serving layer"
+      target_technology: "ClickHouse candidate"
+      severity: medium
+      confidence: 0.7
+      evidence:
+        - "Elasticsearch traffic is dominated by analytical serving pattern"
+        - "True text-search signal is low"
+
+  - id: redis_cache_no_action
+    when:
+      scope.platform: redis
+      access_pattern_scores.cache: "> 0.55"
+    then:
+      type: no_action
+      recommendation: "Redis usage is consistent with cache access"
+      target_technology:
+      severity: low
+      confidence: 0.7
+      evidence:
+        - "Redis traffic has key lookup and TTL or expire signals"
+
+  - id: redis_possible_durable_state
+    when:
+      scope.platform: redis
+      primitive_profile.key_lookup: "> 0.65"
+      primitive_profile.ttl_or_expire_usage: "< 0.10"
+    then:
+      type: review_required
+      recommendation: "Review Redis durable-state usage"
+      target_technology: "Cassandra or PostgreSQL depending on scale and access pattern"
+      severity: medium
+      confidence: 0.65
+      evidence:
+        - "Redis traffic is key-based but has little TTL or expire evidence"
+
+  - id: postgres_heavy_analytics
+    when:
+      scope.platform: postgres
+      primitive_profile.aggregation: "> 0.50"
+      primitive_profile.scan: "> 0.40"
+      access_pattern_scores.analytical_serving: "> 0.60"
+    then:
+      type: technology_mismatch_candidate
+      recommendation: "Review analytical workload on PostgreSQL"
+      target_technology: "ClickHouse or Iceberg/Trino depending on SLA"
+      severity: medium
+      confidence: 0.65
+      evidence:
+        - "PostgreSQL traffic has repeated aggregation and broad-result signals"
+        - "Analytical serving score crossed the review threshold"
+
+  - id: postgres_text_search_review
+    when:
+      scope.platform: postgres
+      primitive_profile.text_search: "> 0.70"
+      access_pattern_scores.search_text: "> 0.65"
+    then:
+      type: review_required
+      recommendation: "Review PostgreSQL text-search workload"
+      target_technology: "PostgreSQL full-text/trigram indexes or Elasticsearch/OpenSearch depending on relevance and scale"
+      severity: medium
+      confidence: 0.62
+      evidence:
+        - "PostgreSQL traffic has repeated text-search predicates"
+        - "Search-text access-pattern score crossed the review threshold"

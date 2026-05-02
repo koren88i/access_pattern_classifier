@@ -1,0 +1,49 @@
+pattern_rules:
+  analytical_serving:
+    score:
+      aggregation: 0.35
+      time_series: 0.20
+      multi_filter: 0.10
+      template_stability: 0.20
+      request_rate: 0.10
+      p95_latency_pressure: 0.05
+    penalties:
+      text_search: -0.30
+      vector_search: -0.30
+      geo_search: -0.15
+
+  search_text:
+    score:
+      text_search: 0.80
+      sort_paginate: 0.10
+      key_lookup: 0.05
+      template_stability: 0.05
+
+  cache:
+    score:
+      key_lookup: 0.30
+      request_rate: 0.10
+      ttl_or_expire_usage: 0.55
+      low_latency: 0.15
+    penalties:
+      aggregation: -0.40
+      scan: -0.30
+
+  oltp:
+    score:
+      key_lookup: 0.30
+      point_write: 0.25
+      update_write: 0.15
+      low_latency: 0.20
+      template_stability: 0.10
+    penalties:
+      aggregation: -0.25
+      scan: -0.25
+      text_search: -0.20
+
+  ad_hoc_analytics:
+    score:
+      scan: 0.30
+      aggregation: 0.25
+      low_template_stability: 0.30
+      large_result: 0.15

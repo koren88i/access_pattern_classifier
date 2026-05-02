@@ -1,0 +1,77 @@
+cases:
+  - case: elastic_dashboard_query
+    platform: elasticsearch
+    expected:
+      primitive_signals:
+        aggregation:
+          matched: true
+          min_signal_weight: 0.8
+        time_series:
+          matched: true
+          min_signal_weight: 0.6
+        key_lookup:
+          matched: true
+          min_signal_weight: 0.2
+        text_search:
+          matched: false
+
+  - case: elastic_text_search
+    platform: elasticsearch
+    expected:
+      primitive_signals:
+        text_search:
+          matched: true
+          min_signal_weight: 0.8
+        aggregation:
+          matched: false
+
+  - case: redis_cache_get_setex
+    platform: redis
+    expected:
+      access_pattern: cache
+      recommendation_type: no_action
+
+  - case: redis_durable_state_get_set_without_ttl
+    platform: redis
+    expected:
+      recommendation_type: review_required
+
+  - case: postgres_simple_oltp_lookup
+    platform: postgres
+    expected:
+      primitive_signals:
+        key_lookup:
+          matched: true
+          min_signal_weight: 0.7
+        aggregation:
+          matched: false
+      access_pattern: oltp
+
+  - case: postgres_scan_group_by
+    platform: postgres
+    expected:
+      primitive_signals:
+        aggregation:
+          matched: true
+          min_signal_weight: 0.8
+        scan:
+          matched: true
+          min_signal_weight: 0.6
+        time_series:
+          matched: true
+          min_signal_weight: 0.6
+      recommendation_type: technology_mismatch_candidate
+      matched_rule_id: postgres_heavy_analytics
+
+  - case: postgres_text_search_catalog
+    platform: postgres
+    expected:
+      primitive_signals:
+        text_search:
+          matched: true
+          min_signal_weight: 0.8
+        aggregation:
+          matched: false
+      access_pattern: search_text
+      recommendation_type: review_required
+      matched_rule_id: postgres_text_search_review
