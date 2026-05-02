@@ -304,6 +304,12 @@ HTML = r"""<!doctype html>
       color: var(--muted);
       margin: 0;
     }
+    .field-help {
+      margin: 5px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
     .source-group-title {
       margin: 8px 0 0;
       font-size: 13px;
@@ -380,6 +386,7 @@ HTML = r"""<!doctype html>
         <div>
           <label for="share">Shape Share</label>
           <input id="share" type="number" min="1" max="100" value="100">
+          <p class="field-help">This control edits one query shape. Add more shapes directly in Scenario YAML.</p>
         </div>
       </div>
       <label>Primitive Bundle</label>

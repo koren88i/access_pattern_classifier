@@ -225,6 +225,8 @@ def test_simulator_ui_contains_response_metadata_builder():
     assert 'id="responseMetadata"' in HTML
     assert "renderResponseMetadataControls" in HTML
     assert "responseMetadataYamlLines" in HTML
+    assert "This control edits one query shape" in HTML
+    assert "Add more shapes directly in Scenario YAML" in HTML
 
 
 def test_matcher_source_exposes_real_code_for_platform_primitive():
@@ -299,7 +301,7 @@ def test_simulator_ui_contains_matcher_source_column():
     assert '" highlight"' in HTML
     assert "Primitive Rule" in HTML
     assert "Advanced source code" in HTML
-    assert HTML.index("Matcher Source") < HTML.index("Scenario YAML")
+    assert HTML.index('id="matcherSource"') < HTML.index('<label for="yaml">Scenario YAML</label>')
 
 
 def test_acceptance_scenarios_drive_expected_recommendations():
