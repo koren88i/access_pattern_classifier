@@ -1,3 +1,4 @@
+from workload_intelligence.simulator.matcher_source import CONDITION_FUNCTIONS
 from workload_intelligence.specs import load_spec
 
 
@@ -49,6 +50,21 @@ def test_primitive_rules_use_only_ontology_primitives():
     }
 
     assert rule_primitives <= ontology_primitives
+
+
+def test_matcher_source_condition_metadata_covers_primitive_rules():
+    rule_conditions = {
+        condition
+        for rule in load_spec("primitive-rules.yaml")["rules"]
+        for condition in (rule.get("when") or {})
+    }
+    matcher_conditions = {
+        condition
+        for condition, source_functions in CONDITION_FUNCTIONS.items()
+        if source_functions
+    }
+
+    assert rule_conditions <= matcher_conditions
 
 
 def test_simulator_capabilities_use_only_ontology_primitives():
