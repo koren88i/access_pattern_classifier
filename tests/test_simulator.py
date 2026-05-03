@@ -1,5 +1,8 @@
 import json
+import threading
+from http.server import ThreadingHTTPServer
 from pathlib import Path
+from urllib.request import urlopen
 
 import pytest
 
@@ -11,7 +14,7 @@ from workload_intelligence.simulator.runner import run_scenario
 from workload_intelligence.simulator.scenario import ScenarioValidationError, load_scenario, scenario_from_text
 from workload_intelligence.simulator.sampling import sample_distribution, sample_response_metadata
 from workload_intelligence.simulator.validation import observed_primitive_share
-from workload_intelligence.simulator.web import HTML
+from workload_intelligence.simulator.web import HTML, make_handler
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -238,6 +241,39 @@ def test_simulator_ui_contains_response_metadata_builder():
     assert "responseMetadataYamlLines" in HTML
     assert "This control edits one query shape" in HTML
     assert "Add more shapes directly in Scenario YAML" in HTML
+
+
+def test_simulator_web_handler_serves_ui_capabilities_and_matcher_source(tmp_path):
+    server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(tmp_path))
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base_url = f"http://127.0.0.1:{server.server_address[1]}"
+
+    try:
+        with urlopen(f"{base_url}/", timeout=5) as response:
+            html = response.read().decode("utf-8")
+
+        with urlopen(f"{base_url}/api/capabilities", timeout=5) as response:
+            capabilities = json.loads(response.read().decode("utf-8"))
+
+        matcher_url = (
+            f"{base_url}/api/matcher-source"
+            "?platform=postgres&primitive=text_search&primitives=text_search"
+        )
+        with urlopen(matcher_url, timeout=5) as response:
+            matcher = json.loads(response.read().decode("utf-8"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+    assert "Workload Simulator" in html
+    assert 'id="matcherSource"' in html
+    assert "postgres" in capabilities["platforms"]
+    assert matcher["platform"] == "postgres"
+    assert matcher["primitive"] == "text_search"
+    assert matcher["sample"]["selected_primitive_signal"]["matched"] is True
+    assert any(rule["id"] == "postgres_text_search_predicate" for rule in matcher["rules"])
 
 
 def test_matcher_source_exposes_real_code_for_platform_primitive():
