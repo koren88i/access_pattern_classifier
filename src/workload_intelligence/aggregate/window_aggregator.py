@@ -156,6 +156,76 @@ def _primitive_profiles(
     }
 
 
+def _window_key(
+    view_name: str,
+    group_by: tuple[str, ...],
+    dimension_values: tuple[Any, ...],
+    start: datetime,
+) -> dict[str, Any]:
+    return {
+        "aggregation_view": view_name,
+        **dict(zip(group_by, dimension_values)),
+        "window_start": start.isoformat().replace("+00:00", "Z"),
+        "window_end": (start + timedelta(days=1)).isoformat().replace("+00:00", "Z"),
+    }
+
+
+def _volume_metrics(events: list[dict[str, Any]], template_counts: Counter) -> dict[str, int]:
+    return {
+        "request_count": len(events),
+        "unique_template_count": len(template_counts),
+        "unique_system_count": len(_known_values(events, "system_id")),
+        "unique_customer_count": len(_known_values(events, "customer_id")),
+    }
+
+
+def _latency_metrics(latencies: list[float]) -> dict[str, float]:
+    return {
+        "avg_latency_ms": mean(latencies) if latencies else 0.0,
+        "p95_latency_ms": _p95(latencies),
+        "max_latency_ms": max(latencies) if latencies else 0.0,
+    }
+
+
+def _data_metrics(events: list[dict[str, Any]]) -> dict[str, float | None]:
+    return {
+        "avg_response_bytes": _average_optional([event.get("response_bytes") for event in events]),
+        "avg_result_count": _average_optional([event.get("result_count") for event in events]),
+    }
+
+
+def _top_templates(
+    events: list[dict[str, Any]],
+    template_counts: Counter,
+    primitive_names: list[str],
+) -> list[dict[str, Any]]:
+    request_count = len(events)
+    top_templates = []
+    for template_id, count in template_counts.most_common(10):
+        matching_events = [event for event in events if event["template_id"] == template_id]
+        top_templates.append(
+            {
+                "template_id": template_id,
+                "request_count": count,
+                "contribution": count / request_count,
+                "primitive_summary": {
+                    primitive: sum(
+                        event["primitive_signals"][primitive]["signal_weight"]
+                        for event in matching_events
+                    )
+                    / count
+                    for primitive in primitive_names
+                },
+            }
+        )
+    return top_templates
+
+
+def _top_templates_coverage(template_counts: Counter, request_count: int) -> float:
+    top_ten_count = sum(count for _, count in template_counts.most_common(10))
+    return top_ten_count / request_count if request_count else 0.0
+
+
 def aggregate_daily_by(
     primitive_events: list[dict[str, Any]],
     group_by: tuple[str, ...],
@@ -178,54 +248,17 @@ def aggregate_daily_by(
         latencies = [float(event["latency_ms"]) for event in events]
         primitive_names = list(events[0]["primitive_signals"].keys()) if events else []
         primitive_profiles = _primitive_profiles(events, primitive_names)
-
-        top_ten_count = sum(count for _, count in template_counts.most_common(10))
-        top_templates_coverage = top_ten_count / request_count if request_count else 0.0
-        top_templates = []
-        for template_id, count in template_counts.most_common(10):
-            matching_events = [event for event in events if event["template_id"] == template_id]
-            top_templates.append(
-                {
-                    "template_id": template_id,
-                    "request_count": count,
-                    "contribution": count / request_count,
-                    "primitive_summary": {
-                        primitive: sum(
-                            event["primitive_signals"][primitive]["signal_weight"]
-                            for event in matching_events
-                        )
-                        / count
-                        for primitive in primitive_names
-                    },
-                }
-            )
-
-        key = {
-                    "aggregation_view": view_name,
-                    **dict(zip(group_by, dimension_values)),
-                    "window_start": start.isoformat().replace("+00:00", "Z"),
-                    "window_end": (start + timedelta(days=1)).isoformat().replace("+00:00", "Z"),
-                }
+        top_templates_coverage = _top_templates_coverage(template_counts, request_count)
+        top_templates = _top_templates(events, template_counts, primitive_names)
+        key = _window_key(view_name, group_by, dimension_values, start)
 
         windows.append(
             {
                 "aggregate_window_id": _aggregate_window_id(key),
                 "key": key,
-                "volume_metrics": {
-                    "request_count": request_count,
-                    "unique_template_count": len(template_counts),
-                    "unique_system_count": len(_known_values(events, "system_id")),
-                    "unique_customer_count": len(_known_values(events, "customer_id")),
-                },
-                "latency_metrics": {
-                    "avg_latency_ms": mean(latencies) if latencies else 0.0,
-                    "p95_latency_ms": _p95(latencies),
-                    "max_latency_ms": max(latencies) if latencies else 0.0,
-                },
-                "data_metrics": {
-                    "avg_response_bytes": _average_optional([event.get("response_bytes") for event in events]),
-                    "avg_result_count": _average_optional([event.get("result_count") for event in events]),
-                },
+                "volume_metrics": _volume_metrics(events, template_counts),
+                "latency_metrics": _latency_metrics(latencies),
+                "data_metrics": _data_metrics(events),
                 "primitive_profile": primitive_profiles["request_count"],
                 "primitive_profiles": primitive_profiles,
                 "template_metrics": {
