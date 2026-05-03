@@ -3,13 +3,14 @@ from pathlib import Path
 
 import pytest
 
-from workload_intelligence.pipeline import primitive_events_from_raw, process_events
+from workload_intelligence.pipeline import primitive_events_from_raw, process_event_report, process_events
 from workload_intelligence.simulator.capabilities import capability_payload
 from workload_intelligence.simulator.generators import generate_events
 from workload_intelligence.simulator.matcher_source import matcher_source_for
 from workload_intelligence.simulator.runner import run_scenario
 from workload_intelligence.simulator.scenario import ScenarioValidationError, load_scenario, scenario_from_text
 from workload_intelligence.simulator.sampling import sample_distribution, sample_response_metadata
+from workload_intelligence.simulator.validation import observed_primitive_share
 from workload_intelligence.simulator.web import HTML
 
 
@@ -154,6 +155,16 @@ def test_simulator_run_writes_artifacts_and_validation(tmp_path):
 
     events = json.loads((run_dir / "events.json").read_text(encoding="utf-8"))
     assert len(events) == 100
+
+
+def test_observed_primitive_share_counts_matched_events_not_signal_weight():
+    events = generate_events(_scenario("postgres_analytics.yaml"))
+    report = process_event_report(events, include_primitive_events=True, include_normalized_events=True)
+    share = observed_primitive_share(report)
+    profile = report["profiles"][0]["primitive_profile"]
+
+    assert share["range_lookup"] == 1.0
+    assert profile["range_lookup"] == pytest.approx(0.55)
 
 
 def test_capability_payload_marks_unsupported_primitives_for_ui():

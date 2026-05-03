@@ -66,33 +66,63 @@ def expected_primitive_share(scenario: Scenario) -> dict[str, float]:
     return {primitive: round(value, 4) for primitive, value in sorted(expected.items())}
 
 
+def observed_primitive_share(report: dict[str, Any]) -> dict[str, float]:
+    primitive_events = report.get("primitive_events") or []
+    if not primitive_events:
+        return {}
+
+    primitive_names = sorted(
+        {
+            primitive
+            for event in primitive_events
+            for primitive in (event.get("primitive_signals") or {})
+        }
+    )
+    total = len(primitive_events)
+    return {
+        primitive: round(
+            sum(
+                1
+                for event in primitive_events
+                if (event.get("primitive_signals") or {}).get(primitive, {}).get("matched")
+            )
+            / total,
+            4,
+        )
+        for primitive in primitive_names
+    }
+
+
 def validate_report(scenario: Scenario, report: dict[str, Any]) -> dict[str, Any]:
     profiles = report.get("profiles") or []
     profile = profiles[0] if profiles else {}
-    observed = profile.get("primitive_profile") or {}
+    observed_profile = profile.get("primitive_profile") or {}
+    observed_share = observed_primitive_share(report)
     expected = expected_primitive_share(scenario)
     warnings = []
 
     for primitive, expected_share in expected.items():
-        observed_score = float(observed.get(primitive, 0.0))
-        if observed_score < expected_share * 0.30:
+        matched_share = float(observed_share.get(primitive, 0.0))
+        if matched_share < expected_share * 0.30:
             warnings.append(
                 {
                     "kind": "primitive_under_detected",
                     "primitive": primitive,
                     "expected_share": expected_share,
-                    "observed_score": round(observed_score, 4),
+                    "observed_share": round(matched_share, 4),
+                    "observed_score": round(float(observed_profile.get(primitive, 0.0)), 4),
                 }
             )
 
-    for primitive, observed_score in sorted(observed.items()):
-        if primitive not in expected and float(observed_score) > 0.20:
+    for primitive, matched_share in sorted(observed_share.items()):
+        if primitive not in expected and float(matched_share) > 0.20:
             warnings.append(
                 {
                     "kind": "unexpected_primitive_detected",
                     "primitive": primitive,
                     "expected_share": 0.0,
-                    "observed_score": round(float(observed_score), 4),
+                    "observed_share": round(float(matched_share), 4),
+                    "observed_score": round(float(observed_profile.get(primitive, 0.0)), 4),
                 }
             )
 
@@ -100,7 +130,8 @@ def validate_report(scenario: Scenario, report: dict[str, Any]) -> dict[str, Any
         "status": "warning" if warnings else "ok",
         "warnings": warnings,
         "expected_primitive_share": expected,
-        "observed_primitive_profile": observed,
+        "observed_primitive_share": observed_share,
+        "observed_primitive_profile": observed_profile,
         "observed_access_pattern_scores": profile.get("access_pattern_scores") or {},
         "dominant_patterns": profile.get("dominant_patterns") or [],
         "recommendations": profile.get("recommendations") or [],

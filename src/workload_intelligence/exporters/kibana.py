@@ -118,6 +118,7 @@ SAVED_SEARCHES = {
             "scenario_name",
             "validation_status",
             "expected_primitive_share",
+            "observed_primitive_share",
             "observed_primitive_profile",
             "observed_access_pattern_scores",
             "recommendation_ids",

@@ -568,7 +568,7 @@ primitive_profile_by_latency_cost[p] =
   sum(operation.primitive_signals[p].signal_weight * latency_ms) / sum(latency_ms)
 ```
 
-Response-volume weighting follows the same idea with `response_bytes`, and `result_count` can trigger response-derived primitive rules such as `large_result`. The basic CLI dashboard renders the final dominant pattern and recommendation, not the raw response metadata columns; event-level lineage exports keep those fields inspectable.
+Response-volume weighting follows the same idea with `response_bytes`, and `result_count` can trigger response-derived primitive rules such as `large_result`. The basic CLI dashboard renders the final dominant pattern and recommendation, not the raw response metadata columns; event-level lineage exports keep those fields inspectable. Validation reports separate match coverage from weighted signal strength: `observed_primitive_share` is the fraction of events whose primitive signal matched, while `observed_primitive_profile` is the averaged weighted signal score used by profiles.
 
 This is important because:
 

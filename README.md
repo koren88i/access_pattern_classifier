@@ -79,6 +79,8 @@ The basic CLI dashboard does not render `latency_ms`, `response_bytes`, or `resu
 
 Kibana lineage views expose the response metadata directly on event-level documents. Use `workload-lineage-events` or `workload-primitive-events` to inspect the raw response fields behind a dashboard result.
 
+In the expected-vs-observed validation view, `expected_primitive_share` and `observed_primitive_share` are both event shares. A value of `1.0` means every query in the run was expected to include, or actually matched, that primitive. `observed_primitive_profile` is separate: it keeps the weighted classifier signal, so a primitive can have `observed_primitive_share: 1.0` while its weighted signal is lower, such as `0.55`.
+
 ## Explore In Kibana
 
 Start the local development Elastic/Kibana stack:
@@ -180,8 +182,8 @@ For manual Discover inspection, use these workflows:
 
    - Data view: `workload-lineage-validation`
    - Filter: `scenario_name: postgres_analytics`
-   - Pin fields: `expected_primitive_share`, `observed_primitive_profile`, `observed_access_pattern_scores`, `recommendation_ids`
-   - Expected: simulator expectations and classifier outputs line up, with recommendation IDs linked back to lineage recommendations.
+   - Pin fields: `expected_primitive_share`, `observed_primitive_share`, `observed_primitive_profile`, `observed_access_pattern_scores`, `recommendation_ids`
+   - Expected: simulator expectations and observed query-match shares line up, with weighted primitive scores and recommendation IDs linked back to lineage recommendations.
 
 ## Test
 

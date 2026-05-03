@@ -217,6 +217,9 @@ def test_lineage_validation_doc_connects_expected_observed_and_recommendations(t
 
     assert doc["validation_status"] == "ok"
     assert doc["expected_primitive_share"]["aggregation"] == 1.0
+    assert doc["observed_primitive_share"]["aggregation"] == 1.0
+    assert doc["observed_primitive_share"]["range_lookup"] == 1.0
+    assert doc["observed_primitive_profile"]["range_lookup"] == pytest.approx(0.55)
     assert doc["observed_primitive_profile"]["aggregation"] >= 0.8
     assert doc["recommendation_ids"]
 
@@ -311,6 +314,7 @@ def test_kibana_saved_searches_reference_data_views(monkeypatch):
     lookup_columns = by_id["workload-lineage-event-lookup"]["attributes"]["columns"]
     template_columns = by_id["workload-lineage-template-evidence"]["attributes"]["columns"]
     event_columns = by_id["workload-lineage-event-forward-trace"]["attributes"]["columns"]
+    validation_columns = by_id["workload-lineage-validation-check"]["attributes"]["columns"]
     assert "event_id" in lookup_columns
     assert "normalized_query_text" in lookup_columns
     assert "raw_query_text" in lookup_columns
@@ -318,3 +322,5 @@ def test_kibana_saved_searches_reference_data_views(monkeypatch):
     assert "normalized_query_text" in template_columns
     assert "normalized_query.sql" not in template_columns
     assert "normalized_query_text" in event_columns
+    assert "observed_primitive_share" in validation_columns
+    assert "observed_primitive_profile" in validation_columns
