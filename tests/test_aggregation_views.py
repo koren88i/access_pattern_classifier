@@ -65,6 +65,23 @@ def test_primitive_profiles_support_request_latency_response_and_entity_weights(
     assert window["volume_metrics"]["unique_customer_count"] == 2
 
 
+def test_aggregate_daily_by_uses_unknown_values_for_missing_dimensions():
+    event = _primitive_event("evt-1", "", "", "tpl-search", 10, 50, 0.0, 1.0)
+    del event["system_id"]
+
+    window = aggregate_daily_by(
+        [event],
+        group_by=("customer_id", "system_id", "platform"),
+        view_name="custom",
+    )[0]
+
+    assert window["key"]["customer_id"] == "unknown_customer"
+    assert window["key"]["system_id"] == "unknown_system"
+    assert window["key"]["platform"] == "elasticsearch"
+    assert window["volume_metrics"]["unique_system_count"] == 0
+    assert window["volume_metrics"]["unique_customer_count"] == 0
+
+
 def test_report_includes_daily_system_platform_customer_and_template_views():
     text_search_events = copy.deepcopy(_load("elastic_text_search.json"))
     text_search_events[0]["identity"]["customer_id"] = "beta"
