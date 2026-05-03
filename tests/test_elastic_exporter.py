@@ -95,6 +95,31 @@ def test_index_templates_include_core_mappings():
     assert templates[elastic.INDEX_LINEAGE_EVENTS]["normalized_query_text"]["type"] == "text"
 
 
+def test_ensure_index_templates_installs_template_for_every_export_index():
+    calls = []
+
+    class FakeIndices:
+        def put_index_template(self, **kwargs):
+            calls.append(kwargs)
+
+    class FakeClient:
+        indices = FakeIndices()
+
+    elastic.ensure_index_templates(FakeClient())
+
+    templates = elastic.index_templates()
+    assert [call["name"] for call in calls] == [
+        f"{index_name}-template"
+        for index_name in templates
+    ]
+    assert [call["index_patterns"] for call in calls] == [
+        [index_name]
+        for index_name in templates
+    ]
+    assert all(call["template"]["mappings"]["dynamic"] is True for call in calls)
+    assert calls[0]["template"]["mappings"]["properties"] == templates[elastic.INDEX_SIM_RUNS]
+
+
 def test_missing_elasticsearch_client_has_clear_error(monkeypatch):
     monkeypatch.setitem(sys.modules, "elasticsearch", None)
 
