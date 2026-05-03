@@ -41,21 +41,8 @@ NORMALIZER_FUNCTIONS: dict[str, list[FunctionRef]] = {
 }
 
 CONDITION_FUNCTIONS: dict[str, list[FunctionRef]] = {
-    "any_path_exists": [rule_engine.path_exists],
-    "body_contains_any_key": [rule_engine.contains_any_key, rule_engine.iter_dicts],
-    "command_in": [rule_engine.command_in],
-    "endpoint_contains": [rule_engine.endpoint_contains],
-    "multi_filter_exists": [rule_engine.multi_filter_exists, rule_engine.iter_dicts],
-    "path_exists": [rule_engine.path_exists],
-    "range_filter_field_matches": [rule_engine.range_filter_field_matches, rule_engine.iter_dicts],
-    "result_count_gte": [rule_engine.result_count_gte],
-    "sql_command_in": [rule_engine.sql_command_in, rule_engine._sql_features],
-    "sql_equality_field_matches": [rule_engine._sql_field_matches, rule_engine._sql_features],
-    "sql_has_any_feature": [rule_engine.sql_has_any_feature, rule_engine._sql_features],
-    "sql_range_field_matches": [rule_engine._sql_field_matches, rule_engine._sql_features],
-    "sql_where_condition_count_gte": [rule_engine.sql_where_condition_count_gte, rule_engine._sql_features],
-    "term_filter_exists": [rule_engine.term_filter_exists, rule_engine.contains_any_key, rule_engine.iter_dicts],
-    "ttl_or_expire_signal": [rule_engine.ttl_or_expire_signal],
+    name: list(condition.source_functions)
+    for name, condition in rule_engine.CONDITION_REGISTRY.items()
 }
 
 
