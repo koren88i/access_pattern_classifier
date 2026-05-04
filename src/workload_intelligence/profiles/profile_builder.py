@@ -1,15 +1,39 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from typing import Any
 
 from workload_intelligence.patterns.scorer import score_access_patterns
 from workload_intelligence.recommendations.recommendation_engine import recommend_for_profile
 
 
+PROFILE_SCOPE_KEYS = (
+    "system_id",
+    "customer_id",
+    "platform",
+    "database_or_index",
+    "window_start",
+    "window_end",
+)
+
+
 def _profile_id(scope: dict[str, Any]) -> str:
-    raw = "|".join(str(scope[key]) for key in ("system_id", "platform", "window_start", "window_end"))
+    raw = json.dumps(
+        {key: scope.get(key) for key in PROFILE_SCOPE_KEYS},
+        sort_keys=True,
+        default=str,
+    )
     return "prof-" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
+
+def _scope_from_window(window: dict[str, Any]) -> dict[str, Any]:
+    key = window["key"]
+    return {
+        scope_key: key[scope_key]
+        for scope_key in PROFILE_SCOPE_KEYS
+        if scope_key in key
+    }
 
 
 def _dominant_patterns(scores: dict[str, float]) -> list[dict[str, Any]]:
@@ -43,12 +67,7 @@ def _explanation(window: dict[str, Any], scores: dict[str, float]) -> list[str]:
 def build_profiles(windows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     profiles: list[dict[str, Any]] = []
     for window in windows:
-        scope = {
-            "system_id": window["key"]["system_id"],
-            "platform": window["key"]["platform"],
-            "window_start": window["key"]["window_start"],
-            "window_end": window["key"]["window_end"],
-        }
+        scope = _scope_from_window(window)
         pattern_scores = score_access_patterns(window)
         profile = {
             "profile_id": _profile_id(scope),

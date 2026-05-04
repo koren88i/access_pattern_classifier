@@ -17,6 +17,7 @@ DEFAULT_WEIGHTING_MODES = (
 )
 
 DAILY_VIEW_DIMENSIONS = {
+    "profile": ("system_id", "customer_id", "platform", "database_or_index"),
     "system": ("system_id", "platform"),
     "platform": ("platform",),
     "customer": ("customer_id", "platform"),
@@ -27,6 +28,7 @@ MISSING_DIMENSION_VALUES = {
     "customer_id": "unknown_customer",
     "system_id": "unknown_system",
     "template_id": "unknown_template",
+    "database_or_index": "unknown_database_or_index",
     "platform": "unknown_platform",
 }
 
@@ -274,8 +276,8 @@ def aggregate_daily_by(
 def aggregate_daily(primitive_events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return aggregate_daily_by(
         primitive_events,
-        group_by=DAILY_VIEW_DIMENSIONS["system"],
-        view_name="system",
+        group_by=DAILY_VIEW_DIMENSIONS["profile"],
+        view_name="profile",
     )
 
 

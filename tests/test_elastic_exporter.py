@@ -16,6 +16,10 @@ from workload_intelligence.simulator.validation import validate_report
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def _load_example(name: str):
+    return json.loads((ROOT / "examples" / name).read_text(encoding="utf-8"))
+
+
 def _export_fixture():
     scenario = load_scenario(ROOT / "scenarios" / "postgres_text_search.yaml")
     events = generate_events(scenario)
@@ -87,6 +91,7 @@ def test_index_templates_include_core_mappings():
     assert primitive_event["normalized_query_command"]["type"] == "keyword"
     assert primitive_event["primitive_signals"]["type"] == "flattened"
     assert primitive_signal["primitive"]["type"] == "keyword"
+    assert primitive_signal["database_or_index"]["type"] == "keyword"
     assert primitive_signal["signal_weight"]["type"] == "double"
     assert primitive_signal["rule_confidence"]["type"] == "double"
     assert templates[elastic.INDEX_LINEAGE_RECOMMENDATIONS]["recommendation_id"]["type"] == "keyword"
@@ -232,6 +237,53 @@ def test_lineage_event_docs_link_forward_to_profile_and_recommendation(tmp_path)
     assert {"aggregation", "scan", "time_series"}.issubset(primitives)
     assert primitives["aggregation"]["signal_weight"] >= 0.8
     assert primitives["aggregation"]["rule_confidence"] >= 0.8
+
+
+def test_lineage_links_use_full_profile_scope(tmp_path):
+    scenario = load_scenario(ROOT / "scenarios" / "elastic_analytics.yaml")
+    dashboard_events = _load_example("elastic_dashboard_events.json")
+    text_search_events = _load_example("elastic_text_search.json")
+    text_search_events[0]["identity"]["system_id"] = "fraud-service"
+    text_search_events[0]["identity"]["customer_id"] = "beta"
+    events = dashboard_events + text_search_events
+    report = process_event_report(events, include_primitive_events=True, include_normalized_events=True)
+
+    actions = elastic.export_actions("run-mixed", scenario, events, report, {}, tmp_path)
+    profiles_by_scope = {
+        (
+            profile["scope"]["customer_id"],
+            profile["scope"]["database_or_index"],
+        ): profile
+        for profile in report["profiles"]
+    }
+    acme_profile = profiles_by_scope[("acme", "transactions")]
+    beta_profile = profiles_by_scope[("beta", "products")]
+    lineage_events = {
+        action["_source"]["event_id"]: action["_source"]
+        for action in actions
+        if action["_index"] == elastic.INDEX_LINEAGE_EVENTS
+    }
+
+    assert lineage_events["evt-elastic-dashboard-1"]["profile_id"] == acme_profile["profile_id"]
+    assert lineage_events["evt-elastic-text-1"]["profile_id"] == beta_profile["profile_id"]
+    assert lineage_events["evt-elastic-text-1"]["customer_id"] == "beta"
+    assert lineage_events["evt-elastic-text-1"]["database_or_index"] == "products"
+
+    acme_recommendation = next(
+        action["_source"]
+        for action in actions
+        if action["_index"] == elastic.INDEX_LINEAGE_RECOMMENDATIONS
+        and action["_source"]["profile_id"] == acme_profile["profile_id"]
+    )
+    beta_template = next(
+        action["_source"]
+        for action in actions
+        if action["_index"] == elastic.INDEX_LINEAGE_TEMPLATES
+        and action["_source"]["profile_id"] == beta_profile["profile_id"]
+    )
+
+    assert "evt-elastic-text-1" not in acme_recommendation["sample_event_ids"]
+    assert beta_template["sample_event_ids"] == ["evt-elastic-text-1"]
 
 
 def test_lineage_validation_doc_connects_expected_observed_and_recommendations(tmp_path):

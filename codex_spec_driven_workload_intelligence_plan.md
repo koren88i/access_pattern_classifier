@@ -7,7 +7,7 @@ Last updated: 2026-05-02
 - Done: Sprint 0 spec artifacts in `specs/`.
 - Done: Sprint 1 end-to-end skeleton for synthetic Elasticsearch events.
 - Done: Early Redis support for cache and possible durable-state examples.
-- Done: Sprint 3 daily aggregation views by system/platform/customer/template and weighted primitive profiles.
+- Done: Sprint 3 daily aggregation views by profile target/system/platform/customer/template and weighted primitive profiles.
 - Done: Initial Sprint 4 PostgreSQL grouped-analytics and text-search recommendation slices.
 - Done: Deterministic YAML-driven workload simulator with artifact output and local scenario editor UI.
 - Done: Optional local Elasticsearch/Kibana sink for simulator pipeline outputs.
@@ -582,6 +582,14 @@ By latency cost:
 
 That tells us most calls are cheap lookups but most platform cost comes from aggregation.
 
+Current product-facing profiles are built from a daily profile aggregation view at `system + customer + platform + database/index`. Missing customer or database/index values are kept as explicit unknown buckets. The wider aggregation views by system, platform, customer, and template remain available in reports and debug dashboards.
+
+Implemented daily aggregate windows now include:
+
+```text
+system + customer + platform + database/index (profile view)
+```
+
 ---
 
 ## 8. Layer 3: Access Pattern Scoring
@@ -749,9 +757,9 @@ WorkloadProfile:
 
   scope:
     system_id: string
-    customer_id: optional string
+    customer_id: string
     platform: string
-    database_or_index: optional string
+    database_or_index: string
     window_start: datetime
     window_end: datetime
 

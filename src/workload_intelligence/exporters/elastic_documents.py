@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
+from workload_intelligence.aggregate.window_aggregator import MISSING_DIMENSION_VALUES
 from workload_intelligence.exporters.elastic_constants import (
     INDEX_AGGREGATE_WINDOWS,
     INDEX_LINEAGE_EVENTS,
@@ -18,6 +19,10 @@ from workload_intelligence.exporters.elastic_constants import (
     INDEX_RECOMMENDATIONS,
     INDEX_SIM_RUNS,
 )
+
+
+PROFILE_MATCH_DIMENSIONS = ("system_id", "customer_id", "platform", "database_or_index")
+WINDOW_MATCH_DIMENSIONS = (*PROFILE_MATCH_DIMENSIONS, "template_id")
 
 
 def _now() -> str:
@@ -38,6 +43,30 @@ def _scope_tags(run_id: str, scenario: Any) -> dict[str, Any]:
         "system_id": target.system_id,
         "customer_id": target.customer_id,
         "platform": target.platform,
+        "database_or_index": target.database_or_index,
+    }
+
+
+def _dimension_value(payload: dict[str, Any], dimension: str) -> str:
+    value = payload.get(dimension)
+    if value in (None, ""):
+        return MISSING_DIMENSION_VALUES.get(dimension, f"unknown_{dimension}")
+    return str(value)
+
+
+def _event_scope_tags(event: dict[str, Any]) -> dict[str, Any]:
+    return {
+        dimension: _dimension_value(event, dimension)
+        for dimension in PROFILE_MATCH_DIMENSIONS
+    }
+
+
+def _profile_scope_tags(profile: dict[str, Any]) -> dict[str, Any]:
+    scope = profile.get("scope") or {}
+    return {
+        dimension: scope[dimension]
+        for dimension in PROFILE_MATCH_DIMENSIONS
+        if dimension in scope
     }
 
 
@@ -98,6 +127,7 @@ def _primitive_event_doc(
 ) -> dict[str, Any]:
     return {
         **_scope_tags(run_id, scenario),
+        **_event_scope_tags(primitive_event),
         "event_id": primitive_event["event_id"],
         "timestamp": primitive_event["timestamp"],
         "template_id": primitive_event["template_id"],
@@ -115,7 +145,7 @@ def _primitive_signal_docs(
     scenario: Any,
     primitive_event: dict[str, Any],
 ) -> Iterable[dict[str, Any]]:
-    tags = _scope_tags(run_id, scenario)
+    tags = {**_scope_tags(run_id, scenario), **_event_scope_tags(primitive_event)}
     for primitive, signal in (primitive_event.get("primitive_signals") or {}).items():
         if not signal.get("matched"):
             continue
@@ -155,6 +185,7 @@ def _aggregate_window_doc(run_id: str, scenario: Any, view_name: str, window: di
 def _profile_doc(run_id: str, scenario: Any, profile: dict[str, Any]) -> dict[str, Any]:
     return {
         **_scope_tags(run_id, scenario),
+        **_profile_scope_tags(profile),
         "profile_id": profile.get("profile_id"),
         "aggregate_window_id": profile.get("aggregate_window_id"),
         "window_start": profile.get("scope", {}).get("window_start"),
@@ -171,7 +202,7 @@ def _profile_doc(run_id: str, scenario: Any, profile: dict[str, Any]) -> dict[st
 
 
 def _recommendation_docs(run_id: str, scenario: Any, profile: dict[str, Any]) -> Iterable[dict[str, Any]]:
-    tags = _scope_tags(run_id, scenario)
+    tags = {**_scope_tags(run_id, scenario), **_profile_scope_tags(profile)}
     profile_id = profile.get("profile_id")
     scope = profile.get("scope") or {}
     for index, recommendation in enumerate(profile.get("recommendations") or []):
@@ -216,30 +247,17 @@ def _profile_events(profile: dict[str, Any], primitive_events: list[dict[str, An
     return [
         event
         for event in primitive_events
-        if event.get("system_id") == scope.get("system_id")
-        and event.get("platform") == scope.get("platform")
+        if _event_matches_scope(event, scope)
         and str(scope.get("window_start", "")) <= str(event.get("timestamp", ""))
         and str(event.get("timestamp", "")) < str(scope.get("window_end", ""))
     ]
 
 
-def _profile_system_window(profile: dict[str, Any], report: dict[str, Any]) -> dict[str, Any] | None:
-    aggregate_window_id = profile.get("aggregate_window_id")
-    if aggregate_window_id:
-        for window in (report.get("aggregation_views") or {}).get("system", []):
-            if window.get("aggregate_window_id") == aggregate_window_id:
-                return window
-    scope = profile.get("scope") or {}
-    for window in (report.get("aggregation_views") or {}).get("system", []):
-        key = window.get("key") or {}
-        if (
-            key.get("system_id") == scope.get("system_id")
-            and key.get("platform") == scope.get("platform")
-            and key.get("window_start") == scope.get("window_start")
-            and key.get("window_end") == scope.get("window_end")
-        ):
-            return window
-    return None
+def _event_matches_scope(event: dict[str, Any], scope: dict[str, Any]) -> bool:
+    return all(
+        dimension not in scope or _dimension_value(event, dimension) == str(scope[dimension])
+        for dimension in PROFILE_MATCH_DIMENSIONS
+    )
 
 
 def _normalized_by_event_id(report: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -295,6 +313,7 @@ def _lineage_recommendation_docs(
         for recommendation in profile.get("recommendations") or []:
             yield {
                 **_scope_tags(run_id, scenario),
+                **_profile_scope_tags(profile),
                 "recommendation_id": recommendation.get("recommendation_id"),
                 "profile_id": profile.get("profile_id"),
                 "aggregate_window_id": profile.get("aggregate_window_id"),
@@ -342,6 +361,7 @@ def _lineage_template_docs(
             primitive_summary = template.get("primitive_summary") or {}
             doc = {
                 **_scope_tags(run_id, scenario),
+                **_profile_scope_tags(profile),
                 "profile_id": profile.get("profile_id"),
                 "aggregate_window_id": profile.get("aggregate_window_id"),
                 "template_id": template_id,
@@ -380,8 +400,8 @@ def _event_window_ids(event: dict[str, Any], report: dict[str, Any]) -> list[str
             if not (str(key.get("window_start", "")) <= timestamp < str(key.get("window_end", ""))):
                 continue
             dimensions_match = True
-            for dimension in ("system_id", "platform", "customer_id", "template_id"):
-                if dimension in key and str(event.get(dimension)) != str(key[dimension]):
+            for dimension in WINDOW_MATCH_DIMENSIONS:
+                if dimension in key and _dimension_value(event, dimension) != str(key[dimension]):
                     dimensions_match = False
                     break
             if dimensions_match and window.get("aggregate_window_id"):
@@ -394,8 +414,7 @@ def _event_profile(event: dict[str, Any], report: dict[str, Any]) -> dict[str, A
     for profile in report.get("profiles") or []:
         scope = profile.get("scope") or {}
         if (
-            event.get("system_id") == scope.get("system_id")
-            and event.get("platform") == scope.get("platform")
+            _event_matches_scope(event, scope)
             and str(scope.get("window_start", "")) <= timestamp < str(scope.get("window_end", ""))
         ):
             return profile
@@ -414,6 +433,7 @@ def _lineage_event_docs(
         normalized = normalized_by_id.get(primitive_event["event_id"], {})
         yield {
             **_scope_tags(run_id, scenario),
+            **_event_scope_tags(primitive_event),
             "event_id": primitive_event["event_id"],
             "timestamp": primitive_event["timestamp"],
             "template_id": primitive_event["template_id"],

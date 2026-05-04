@@ -24,15 +24,18 @@ def _top_primitives(profile: dict[str, float], limit: int = 3) -> str:
 
 
 def render_dashboard_rows(profiles: list[dict[str, Any]]) -> str:
-    headers = ["System", "Platform", "Dominant Pattern", "Score", "Recommendation"]
+    headers = ["System", "Customer", "Platform", "Database/Index", "Dominant Pattern", "Score", "Recommendation"]
     rows = []
     for profile in profiles:
         dominant = profile["dominant_patterns"][0] if profile["dominant_patterns"] else {}
         recommendation = profile["recommendations"][0]
+        scope = profile["scope"]
         rows.append(
             [
-                profile["scope"]["system_id"],
-                profile["scope"]["platform"],
+                scope["system_id"],
+                scope.get("customer_id", ""),
+                scope["platform"],
+                scope.get("database_or_index", ""),
                 dominant.get("pattern", "unknown_mixed"),
                 f"{dominant.get('score', 0.0):.2f}",
                 recommendation["recommendation"],

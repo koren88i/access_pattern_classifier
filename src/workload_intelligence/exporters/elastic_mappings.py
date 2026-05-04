@@ -56,6 +56,7 @@ def index_templates() -> dict[str, dict[str, Any]]:
         "system_id": keyword,
         "customer_id": keyword,
         "platform": keyword,
+        "database_or_index": keyword,
     }
     return {
         INDEX_SIM_RUNS: {

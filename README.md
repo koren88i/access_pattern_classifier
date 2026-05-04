@@ -9,7 +9,7 @@ raw synthetic event
 -> platform normalization
 -> query template fingerprint
 -> primitive signal extraction
--> daily system/platform aggregation
+-> daily target-scope aggregation
 -> access-pattern scoring
 -> workload profile
 -> recommendation
@@ -112,7 +112,7 @@ Useful data views:
 - `workload-primitive-signals`: primitive signal weight over time by platform, system, scenario, and template.
 - `workload-primitive-events`: event-level primitive signals, normalized queries, and response metadata.
 - `workload-aggregate-windows`: request-count, latency-cost, response-volume, and template-stability aggregations.
-- `workload-profiles`: dominant patterns and profile-level evidence.
+- `workload-profiles`: dominant patterns and profile-level evidence scoped by system, customer, platform, and database/index.
 - `workload-recommendations`: recommendation severity, matched rule id, and target technology.
 - `workload-lineage-recommendations`: recommendation backtrace with rule thresholds and observed values.
 - `workload-lineage-templates`: top template evidence with normalized query, matched rules, and sample events.
@@ -202,7 +202,7 @@ Implemented:
 - Sprint 0 spec files, including at least six acceptance cases.
 - Sprint 1 Elasticsearch end-to-end skeleton.
 - Early Sprint 2 Redis GET/SETEX cache and GET/SET durable-state signals.
-- Sprint 3 daily aggregation views by system, platform, customer, and template.
+- Sprint 3 daily aggregation views by profile target, system, platform, customer, and template.
 - Narrow Sprint 4 PostgreSQL analytics and text-search recommendation slices.
 - Deterministic YAML-driven workload simulator with mocked response metadata and a local editor UI.
 - Optional local Elasticsearch/Kibana sink for simulator pipeline outputs.

@@ -36,7 +36,7 @@ def process_event_report(
     primitive_events = primitive_events_from_normalized(normalized_events)
     aggregation_views = aggregate_daily_views(primitive_events)
     report = {
-        "profiles": build_profiles(aggregation_views["system"]),
+        "profiles": build_profiles(aggregation_views["profile"]),
         "aggregation_views": aggregation_views,
     }
     if include_primitive_events:

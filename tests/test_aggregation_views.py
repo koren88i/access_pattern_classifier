@@ -29,8 +29,9 @@ def _primitive_event(
     response_bytes: float,
     aggregation: float,
     text_search: float,
+    database_or_index: str | None = "events",
 ):
-    return {
+    event = {
         "event_id": event_id,
         "platform": "elasticsearch",
         "system_id": system_id,
@@ -45,6 +46,9 @@ def _primitive_event(
             "text_search": {"signal_weight": text_search},
         },
     }
+    if database_or_index is not None:
+        event["database_or_index"] = database_or_index
+    return event
 
 
 def test_primitive_profiles_support_request_latency_response_and_entity_weights():
@@ -66,23 +70,24 @@ def test_primitive_profiles_support_request_latency_response_and_entity_weights(
 
 
 def test_aggregate_daily_by_uses_unknown_values_for_missing_dimensions():
-    event = _primitive_event("evt-1", "", "", "tpl-search", 10, 50, 0.0, 1.0)
+    event = _primitive_event("evt-1", "", "", "tpl-search", 10, 50, 0.0, 1.0, None)
     del event["system_id"]
 
     window = aggregate_daily_by(
         [event],
-        group_by=("customer_id", "system_id", "platform"),
-        view_name="custom",
+        group_by=("system_id", "customer_id", "platform", "database_or_index"),
+        view_name="profile",
     )[0]
 
-    assert window["key"]["customer_id"] == "unknown_customer"
     assert window["key"]["system_id"] == "unknown_system"
+    assert window["key"]["customer_id"] == "unknown_customer"
     assert window["key"]["platform"] == "elasticsearch"
+    assert window["key"]["database_or_index"] == "unknown_database_or_index"
     assert window["volume_metrics"]["unique_system_count"] == 0
     assert window["volume_metrics"]["unique_customer_count"] == 0
 
 
-def test_report_includes_daily_system_platform_customer_and_template_views():
+def test_report_includes_daily_profile_system_platform_customer_and_template_views():
     text_search_events = copy.deepcopy(_load("elastic_text_search.json"))
     text_search_events[0]["identity"]["customer_id"] = "beta"
     raw_events = _load("elastic_dashboard_events.json") + text_search_events
@@ -90,10 +95,14 @@ def test_report_includes_daily_system_platform_customer_and_template_views():
     report = process_event_report(raw_events)
     views = report["aggregation_views"]
 
-    assert set(views) == {"system", "platform", "customer", "template"}
+    assert set(views) == {"profile", "system", "platform", "customer", "template"}
+    assert len(views["profile"]) == 2
     assert len(views["system"]) == 2
     assert len(views["customer"]) == 2
     assert len(views["template"]) == 2
+
+    profile_key = views["profile"][0]["key"]
+    assert {"system_id", "customer_id", "platform", "database_or_index"} <= set(profile_key)
 
     platform_window = views["platform"][0]
     assert platform_window["key"]["platform"] == "elasticsearch"

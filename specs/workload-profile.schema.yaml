@@ -2,9 +2,9 @@ WorkloadProfile:
   profile_id: string
   scope:
     system_id: string
-    customer_id: optional string
+    customer_id: string
     platform: string
-    database_or_index: optional string
+    database_or_index: string
     window_start: datetime
     window_end: datetime
   volume:
@@ -56,6 +56,10 @@ WorkloadProfile:
   evidence:
     top_templates: list
     explanation: list
+
+ScopeMissingBuckets:
+  customer_id: unknown_customer
+  database_or_index: unknown_database_or_index
 
 PrimitiveProfile:
   key_lookup: number
