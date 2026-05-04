@@ -1,12 +1,6 @@
 from __future__ import annotations
 
-HTML = r"""<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Workload Simulator</title>
-  <style>
+STYLE = r"""
     :root {
       color-scheme: light;
       --ink: #18202a;
@@ -212,6 +206,30 @@ HTML = r"""<!doctype html>
       gap: 8px;
       margin: 14px 0;
     }
+    .export-options {
+      display: grid;
+      gap: 8px;
+      margin: 14px 0 4px;
+    }
+    .toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0;
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .toggle input {
+      width: auto;
+      flex: 0 0 auto;
+    }
+    .toggle.disabled {
+      color: #8a98a8;
+    }
+    .export-result {
+      margin-top: 12px;
+    }
     .result {
       margin-top: 16px;
       border-top: 1px solid var(--line);
@@ -332,9 +350,10 @@ HTML = r"""<!doctype html>
       }
       textarea { min-height: 360px; }
     }
-  </style>
-</head>
-<body>
+""".strip("\n")
+
+
+BODY = r"""
   <header>
     <h1>Workload Simulator</h1>
     <div class="status" id="status"></div>
@@ -382,6 +401,16 @@ HTML = r"""<!doctype html>
       <div class="response-signals" id="responseSignals"></div>
       <label>Response Metadata</label>
       <div class="response-metadata" id="responseMetadata"></div>
+      <div class="export-options">
+        <label class="toggle" for="indexElastic">
+          <input id="indexElastic" type="checkbox">
+          <span>Write to Elasticsearch</span>
+        </label>
+        <label class="toggle disabled" for="includeRawQuery" id="includeRawQueryToggle">
+          <input id="includeRawQuery" type="checkbox" disabled>
+          <span>Include raw query samples</span>
+        </label>
+      </div>
       <div class="actions">
         <button id="build" class="secondary">Build YAML</button>
         <button id="run">Run Scenario</button>
@@ -397,7 +426,10 @@ HTML = r"""<!doctype html>
       <div class="result" id="result"></div>
     </section>
   </main>
-  <script>
+""".strip("\n")
+
+
+STATE_SCRIPT = r"""
     let capabilities = null;
     let selectedPrimitive = null;
     let matcherRequest = 0;
@@ -419,7 +451,42 @@ HTML = r"""<!doctype html>
         .replaceAll(">", "&gt;")
         .replaceAll('"', "&quot;");
     }
+""".strip("\n")
 
+
+EXPORT_RENDERING_SCRIPT = r"""
+    function renderElasticExport(exportPayload) {
+      if (!exportPayload) {
+        return "";
+      }
+      const statusClass = exportPayload.status === "ok" ? "" : exportPayload.status === "warning" ? "warning" : "error";
+      if (exportPayload.status === "error") {
+        return `
+          <div class="export-result">
+            <h3>Elasticsearch</h3>
+            <p class="${statusClass}">${escapeHtml(exportPayload.error || "Export failed")}</p>
+          </div>
+        `;
+      }
+      const indices = (exportPayload.indices || []).map(escapeHtml).join(", ");
+      const dataViews = (exportPayload.data_views || []).map(escapeHtml).join(", ");
+      const warning = exportPayload.warning ? `<p class="warning">${escapeHtml(exportPayload.warning)}</p>` : "";
+      return `
+        <div class="export-result">
+          <h3>Elasticsearch</h3>
+          <p class="${statusClass}">Indexed ${escapeHtml(exportPayload.indexed || 0)} documents.</p>
+          <p><a href="${escapeHtml(exportPayload.kibana_url)}" target="_blank">Open Kibana</a></p>
+          <p>Event time: ${escapeHtml(exportPayload.time_range.start)} to ${escapeHtml(exportPayload.time_range.end)}</p>
+          ${indices ? `<p>Indices: ${indices}</p>` : ""}
+          ${dataViews ? `<p>Data views: ${dataViews}</p>` : ""}
+          ${warning}
+        </div>
+      `;
+    }
+""".strip("\n")
+
+
+MATCHER_SOURCE_SCRIPT = r"""
     function renderPrimitiveSelection() {
       document.querySelectorAll(".primitive").forEach(item => {
         const input = item.querySelector("input");
@@ -634,7 +701,10 @@ HTML = r"""<!doctype html>
         </details>
       `;
     }
+""".strip("\n")
 
+
+PRIMITIVE_CONTROLS_SCRIPT = r"""
     function renderPrimitives() {
       const platform = document.getElementById("platform").value;
       const box = document.getElementById("primitives");
@@ -701,7 +771,10 @@ HTML = r"""<!doctype html>
         box.appendChild(item);
       }
     }
+""".strip("\n")
 
+
+RESPONSE_METADATA_SCRIPT = r"""
     function responseDistribution(name) {
       return (capabilities.response_metadata.distributions || []).find(item => item.name === name);
     }
@@ -795,7 +868,10 @@ HTML = r"""<!doctype html>
       }
       return lines;
     }
+""".strip("\n")
 
+
+SCENARIO_RUNNER_SCRIPT = r"""
     function buildYaml() {
       const primitives = checkedPrimitives();
       const platform = document.getElementById("platform").value;
@@ -825,30 +901,50 @@ HTML = r"""<!doctype html>
     async function runScenario() {
       setStatus("Running...");
       document.getElementById("result").innerHTML = "";
+      const indexElastic = document.getElementById("indexElastic").checked;
+      const includeRawQuery = document.getElementById("includeRawQuery").checked;
       const response = await fetch("/api/run", {
         method: "POST",
-        headers: { "Content-Type": "text/plain" },
-        body: document.getElementById("yaml").value
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scenario: document.getElementById("yaml").value,
+          index_elastic: indexElastic,
+          include_raw_query: includeRawQuery,
+          setup_kibana_data_views: indexElastic
+        })
       });
       const payload = await response.json();
       if (!response.ok) {
         setStatus(payload.error || "Run failed", "error");
         return;
       }
-      setStatus(`Saved ${payload.run_id}`, payload.validation.status === "warning" ? "warning" : "");
+      const exportStatus = payload.elastic_export?.status;
+      const statusClass = exportStatus === "error" ? "error" : exportStatus === "warning" || payload.validation.status === "warning" ? "warning" : "";
+      const exportText = exportStatus === "ok"
+        ? `; indexed ${payload.elastic_export.indexed} docs`
+        : exportStatus === "warning"
+          ? "; indexed with Kibana warning"
+          : exportStatus === "error"
+            ? "; Elasticsearch export failed"
+            : "";
+      setStatus(`Saved ${payload.run_id}${exportText}`, statusClass);
       const links = payload.artifacts.map(item => `<li><a href="${item.href}" target="_blank">${item.name}</a></li>`).join("");
       const warnings = payload.validation.warnings.length
         ? `<h3>Warnings</h3><pre>${JSON.stringify(payload.validation.warnings, null, 2)}</pre>`
         : "<p>No validation warnings.</p>";
       document.getElementById("result").innerHTML = `
         <h2>Dashboard</h2>
-        <pre>${payload.dashboard.replaceAll("&", "&amp;").replaceAll("<", "&lt;")}</pre>
+        <pre>${escapeHtml(payload.dashboard)}</pre>
+        ${renderElasticExport(payload.elastic_export)}
         ${warnings}
         <h3>Artifacts</h3>
         <ul>${links}</ul>
       `;
     }
+""".strip("\n")
 
+
+INIT_SCRIPT = r"""
     async function init() {
       capabilities = await (await fetch("/api/capabilities")).json();
       const platformSelect = document.getElementById("platform");
@@ -866,6 +962,15 @@ HTML = r"""<!doctype html>
       });
       document.getElementById("build").addEventListener("click", buildYaml);
       document.getElementById("run").addEventListener("click", runScenario);
+      document.getElementById("indexElastic").addEventListener("change", event => {
+        const enabled = event.target.checked;
+        const rawQuery = document.getElementById("includeRawQuery");
+        rawQuery.disabled = !enabled;
+        if (!enabled) {
+          rawQuery.checked = false;
+        }
+        document.getElementById("includeRawQueryToggle").classList.toggle("disabled", !enabled);
+      });
       renderResponseMetadataControls();
       renderPrimitives();
       for (const name of ["text_search", "sort_paginate"]) {
@@ -879,8 +984,42 @@ HTML = r"""<!doctype html>
       setStatus("Ready");
     }
     init().catch(error => setStatus(error.message, "error"));
+""".strip("\n")
+
+
+SCRIPT = "\n\n".join(
+    [
+        STATE_SCRIPT,
+        EXPORT_RENDERING_SCRIPT,
+        MATCHER_SOURCE_SCRIPT,
+        PRIMITIVE_CONTROLS_SCRIPT,
+        RESPONSE_METADATA_SCRIPT,
+        SCENARIO_RUNNER_SCRIPT,
+        INIT_SCRIPT,
+    ]
+)
+
+
+def render_ui_page() -> str:
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Workload Simulator</title>
+  <style>
+{STYLE}
+  </style>
+</head>
+<body>
+{BODY}
+  <script>
+{SCRIPT}
   </script>
 </body>
 </html>
 """
+
+
+HTML = render_ui_page()
 
