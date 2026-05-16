@@ -7,6 +7,12 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlparse
 
+from workload_intelligence.exporters.elastic import (
+    DEFAULT_ELASTICSEARCH_URL,
+    ElasticExportError,
+    index_run,
+)
+from workload_intelligence.exporters.kibana import DEFAULT_KIBANA_URL, setup_data_views
 from workload_intelligence.simulator.capabilities import capability_payload
 from workload_intelligence.simulator.matcher_source import matcher_source_for
 from workload_intelligence.simulator.runner import DEFAULT_OUTPUT_ROOT, run_scenario_text
@@ -30,6 +36,99 @@ def _text_response(handler: BaseHTTPRequestHandler, status: int, text: str, cont
     handler.send_header("Content-Length", str(len(encoded)))
     handler.end_headers()
     handler.wfile.write(encoded)
+
+
+def _iso_utc(value: Any) -> str:
+    return value.isoformat().replace("+00:00", "Z")
+
+
+def _parse_run_request(handler: BaseHTTPRequestHandler, body: str) -> dict[str, Any]:
+    content_type = handler.headers.get("Content-Type", "")
+    if "application/json" not in content_type:
+        return {
+            "scenario_text": body,
+            "index_elastic": False,
+            "include_raw_query": False,
+            "setup_kibana_data_views": False,
+            "elasticsearch_url": DEFAULT_ELASTICSEARCH_URL,
+            "kibana_url": DEFAULT_KIBANA_URL,
+        }
+    try:
+        payload = json.loads(body)
+    except json.JSONDecodeError as exc:
+        raise ScenarioValidationError("request body must be valid JSON") from exc
+    if not isinstance(payload, dict):
+        raise ScenarioValidationError("request body must be a JSON object")
+    scenario_text = payload.get("scenario") or payload.get("scenario_text")
+    if not isinstance(scenario_text, str) or not scenario_text.strip():
+        raise ScenarioValidationError("scenario is required")
+    index_elastic = bool(payload.get("index_elastic"))
+    return {
+        "scenario_text": scenario_text,
+        "index_elastic": index_elastic,
+        "include_raw_query": bool(payload.get("include_raw_query")),
+        "setup_kibana_data_views": bool(payload.get("setup_kibana_data_views", index_elastic)),
+        "elasticsearch_url": str(payload.get("elasticsearch_url") or DEFAULT_ELASTICSEARCH_URL),
+        "kibana_url": str(payload.get("kibana_url") or DEFAULT_KIBANA_URL),
+    }
+
+
+def _artifact_links(run_id: str) -> list[dict[str, str]]:
+    return [
+        {"name": name, "href": f"/runs/{run_id}/{name}"}
+        for name in (
+            "scenario.yaml",
+            "events.json",
+            "profiles.json",
+            "report.json",
+            "dashboard.txt",
+            "platform.txt",
+            "templates.txt",
+            "primitive-weights.txt",
+            "validation.json",
+        )
+    ]
+
+
+def _export_to_elastic(result: dict[str, Any], request: dict[str, Any]) -> dict[str, Any]:
+    scenario = result["scenario"]
+    payload: dict[str, Any] = {
+        "status": "ok",
+        "elasticsearch_url": request["elasticsearch_url"],
+        "kibana_url": request["kibana_url"],
+        "time_range": {
+            "start": _iso_utc(scenario.time_range.start),
+            "end": _iso_utc(scenario.time_range.end),
+        },
+    }
+    try:
+        export_result = index_run(
+            run_id=result["run_id"],
+            scenario=scenario,
+            events=result["events"],
+            report=result["report"],
+            validation=result["validation"],
+            run_dir=result["run_dir"],
+            elasticsearch_url=request["elasticsearch_url"],
+            include_raw_query=request["include_raw_query"],
+        )
+    except ElasticExportError as exc:
+        return {**payload, "status": "error", "error": str(exc)}
+
+    payload.update(
+        {
+            "indexed": export_result["indexed"],
+            "indices": export_result["indices"],
+            "include_raw_query": request["include_raw_query"],
+        }
+    )
+    if request["setup_kibana_data_views"]:
+        try:
+            payload["data_views"] = setup_data_views(request["kibana_url"])
+        except ElasticExportError as exc:
+            payload["status"] = "warning"
+            payload["warning"] = f"Indexed data, but Kibana data-view setup failed: {exc}"
+    return payload
 
 
 def make_handler(output_root: Path):
@@ -68,26 +167,14 @@ def make_handler(output_root: Path):
                 _json_response(self, HTTPStatus.NOT_FOUND, {"error": "not found"})
                 return
             length = int(self.headers.get("Content-Length", "0") or 0)
-            scenario_text = self.rfile.read(length).decode("utf-8")
+            body = self.rfile.read(length).decode("utf-8")
             try:
-                result = run_scenario_text(scenario_text, output_root=root)
+                request = _parse_run_request(self, body)
+                result = run_scenario_text(request["scenario_text"], output_root=root)
             except ScenarioValidationError as exc:
                 _json_response(self, HTTPStatus.BAD_REQUEST, {"error": str(exc)})
                 return
-            artifacts = [
-                {"name": name, "href": f"/runs/{result['run_id']}/{name}"}
-                for name in (
-                    "scenario.yaml",
-                    "events.json",
-                    "profiles.json",
-                    "report.json",
-                    "dashboard.txt",
-                    "platform.txt",
-                    "templates.txt",
-                    "primitive-weights.txt",
-                    "validation.json",
-                )
-            ]
+            elastic_export = _export_to_elastic(result, request) if request["index_elastic"] else None
             _json_response(
                 self,
                 HTTPStatus.OK,
@@ -95,7 +182,8 @@ def make_handler(output_root: Path):
                     "run_id": result["run_id"],
                     "dashboard": result["dashboard"],
                     "validation": result["validation"],
-                    "artifacts": artifacts,
+                    "artifacts": _artifact_links(result["run_id"]),
+                    "elastic_export": elastic_export,
                 },
             )
 

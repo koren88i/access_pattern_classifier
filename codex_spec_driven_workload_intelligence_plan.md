@@ -9,9 +9,15 @@ Last updated: 2026-05-16
 - Done: Early Redis support for cache and possible durable-state examples.
 - Done: Sprint 3 daily aggregation views by profile target/system/platform/customer/template and weighted primitive profiles.
 - Done: Initial Sprint 4 PostgreSQL grouped-analytics and text-search recommendation slices.
-- Done: Deterministic YAML-driven workload simulator with artifact output and local scenario editor UI.
+- Done: CLI/debug dashboard views for profiles, report JSON, platform market analysis, top templates, and primitive-weight comparisons.
+- Done: Deterministic YAML-driven workload simulator for PostgreSQL, Redis, and Elasticsearch scenarios, with artifact output and local scenario editor UI.
+- Done: Simulator response metadata distributions for latency, response bytes, and result count, including YAML shape-level overrides.
+- Done: Simulator validation compares expected primitive event shares, observed matched-event shares, weighted primitive profiles, access-pattern scores, and recommendations.
 - Done: Optional local Elasticsearch/Kibana sink for simulator pipeline outputs.
+- Done: Elasticsearch export indices and mappings for simulator runs, primitive events/signals, aggregate windows, profiles, recommendations, and lineage documents.
+- Done: Kibana data views for workload indices.
 - Done: Kibana lineage export views for recommendation backtrace, template evidence, event trace, and simulator validation.
+- Done: Kibana saved Discover sessions and a generated lineage dashboard with run, event-id, and template-id controls.
 - Done: Simulator query flags are backed by capability SSOT, primitive descriptions come from ontology SSOT, and response-derived signals are separated from query-shape controls.
 - Done: Simulator Matcher Source inspector shows generated query, rule condition trace, highlighted normalized matcher fields, primitive rule YAML, and advanced source code.
 - Verified: `python -m pytest` passes.
@@ -22,6 +28,17 @@ Last updated: 2026-05-16
 1. Add simulator scenarios where the same `system_id + platform` emits multiple `customer_id` and `database_or_index` targets, then verify profiles, lineage, and dashboard rows stay separated.
 2. Expand Sprint 4 PostgreSQL parser and recommendation coverage beyond the current lookup, grouped-analytics, and text-search slices.
 3. Clean up or harden Kibana dashboard/search usability after the scenario coverage is in place, using the new multi-scope runs as realistic validation data.
+
+### Future Simplification Work
+
+These are cleanup-only follow-ups. They should preserve behavior, add or keep focused tests, and stay separate from new classifier capability work.
+
+- Move the simulator UI from generated Python string sections into static files once the page grows again: `index.html`, `app.css`, and `app.js`, still served by the existing local HTTP handler without adding a frontend build step.
+- Split simulator web request handling from export orchestration. Keep routing in `simulator/web.py`, and move run-request parsing, artifact-link generation, and Elasticsearch/Kibana export response shaping into focused helper modules.
+- Split Elasticsearch export document builders into core pipeline export documents and lineage/debug export documents while keeping `export_actions()` as the stable public entrypoint.
+- Move Kibana saved-search and dashboard declarations out of Python constants into a spec/config file when those objects need more iteration, so the debug surface follows the repo's spec-driven style.
+- Split broad simulator tests by concern: scenario parsing/generation, response metadata, web API behavior, UI page contract, and matcher-source inspection.
+- Keep the current no-framework local UI unless the product surface changes into a real web dashboard. Prefer deleting string sprawl before introducing a build tool.
 
 ## 1. Mission
 
@@ -391,6 +408,8 @@ rules:
 
 Primitive names and descriptions must be declared in `primitive-ontology.yaml` before they appear in extraction rules or simulator capabilities. Platform-specific detection details belong in `primitive-rules.yaml`; for example `redis_get_by_key` should normally be a rule id that emits the ontology primitive `key_lookup`, not a new primitive.
 
+Current primitive extraction also records the matched rule ids on each signal. This keeps event-level evidence explainable all the way through simulator artifacts, Kibana lineage documents, and dashboard/debug views.
+
 Simulator query-shape controls are narrower than the ontology. `simulator-capabilities.yaml` declares which ontology primitives can be synthesized as query flags for each platform. Response-derived operational signals such as `large_result` and `low_latency_sensitive` are driven by response metadata distributions and are shown separately from query flags. Response metadata is event evidence, not a query-shape primitive: it can affect primitive extraction, latency/data-weighted aggregation, access-pattern scores, recommendations, and dashboard rows, while event-level Kibana lineage views expose `latency_ms`, `response_bytes`, and `result_count` directly.
 
 ---
@@ -588,12 +607,35 @@ By latency cost:
 
 That tells us most calls are cheap lookups but most platform cost comes from aggregation.
 
-Current product-facing profiles are built from a daily profile aggregation view at `system + customer + platform + database/index`. Missing customer or database/index values are kept as explicit unknown buckets. The wider aggregation views by system, platform, customer, and template remain available in reports and debug dashboards.
+### Implemented Aggregation Views
 
-Implemented daily aggregate windows now include:
+The current implementation emits daily aggregate windows for:
 
 ```text
 system + customer + platform + database/index (profile view)
+system + platform
+platform
+customer + platform
+system + platform + template
+```
+
+Each window carries:
+
+```text
+request_count
+unique_template_count
+unique_system_count
+unique_customer_count
+latency metrics
+response metadata averages
+top template coverage
+template stability
+primitive profiles by:
+- request count
+- latency cost
+- response volume
+- unique systems
+- unique customers
 ```
 
 ---
@@ -704,6 +746,8 @@ oltp
 ad_hoc_analytics
 unknown_mixed
 ```
+
+Current scoring rules implement this MVP set. `unknown_mixed` is computed as a fallback when no known pattern is strong enough. The broader ontology still names future patterns such as vector search, geo search, high-throughput state, and blob/object access, but those are not yet full scored workloads.
 
 ### Pattern Rule Example
 
@@ -869,6 +913,8 @@ WorkloadProfile:
 }
 ```
 
+Current product-facing profiles are built from the daily profile aggregation view: `system + customer + platform + database/index`. Missing customer or database/index values are kept as explicit unknown buckets. The wider aggregation views by system, platform, customer, and template remain available in reports and debug dashboards.
+
 ---
 
 ## 10. Recommendation Layer
@@ -928,9 +974,109 @@ rules:
       severity: "medium"
 ```
 
+### Implemented Recommendation Rules
+
+Current YAML recommendation rules cover:
+
+```text
+Elasticsearch analytical-serving candidate
+Redis cache no-action confirmation
+Redis possible durable-state review
+PostgreSQL heavy analytics review
+PostgreSQL text-search review
+```
+
+Each emitted recommendation includes:
+
+```text
+recommendation id
+recommendation type
+target technology when relevant
+severity
+confidence
+matched rule id
+condition details with thresholds and observed values
+evidence strings
+```
+
 ---
 
-## 11. Dashboard v0
+## 11. Simulator and Validation Harness
+
+The original MVP plan focused on example JSON files. The current implementation also has a deterministic simulator and validation harness so new behavior can be exercised as replayable vertical slices.
+
+### Implemented Simulator Features
+
+The simulator supports:
+
+```text
+YAML scenario files
+platform capability validation from specs/simulator-capabilities.yaml
+deterministic event generation from seed + query shape shares
+PostgreSQL query generation
+Elasticsearch query generation
+Redis command generation
+global response metadata distributions
+optional per-query-shape response overrides in YAML
+artifact output under simulator_runs/
+local browser-based scenario editor
+```
+
+Current checked-in scenarios include:
+
+```text
+postgres_analytics
+postgres_text_search
+redis_cache
+redis_durable_state
+elastic_analytics
+```
+
+### Response Metadata In Simulation
+
+Simulator scenarios require response distributions for:
+
+```text
+latency_ms
+response_bytes
+result_count
+```
+
+Those values flow into generated raw events, primitive extraction, aggregate latency/data metrics, weighted primitive profiles, pattern scoring, recommendations, and lineage exports.
+
+Query-shape primitives and response-derived signals remain separate. For example, `large_result` is not a selectable query flag; it is emitted by primitive rules when response metadata crosses the configured threshold. `low_latency_sensitive` is present in the ontology and simulator capability model as response-derived, but it does not yet have a primitive extraction rule.
+
+### Validation Output
+
+Every simulator run writes validation data that compares:
+
+```text
+expected_primitive_share
+observed_primitive_share
+observed_primitive_profile
+observed_access_pattern_scores
+dominant_patterns
+recommendations
+```
+
+`expected_primitive_share` and `observed_primitive_share` are event shares. `observed_primitive_profile` is the weighted classifier signal used by workload profiles, so it can be lower than the matched-event share for a primitive with a signal weight below 1.0.
+
+### Matcher Source Inspector
+
+The simulator UI includes a Matcher Source inspector for ontology/debug trust. It shows:
+
+```text
+the generated sample query
+the normalized matcher input
+which normalized fields a primitive rule reads
+whether each rule condition matched
+the primitive rule YAML
+the relevant normalizer, generator, and rule-engine source blocks
+```
+
+---
+
+## 12. Dashboard v0
 
 Expose the full product from day one.
 
@@ -986,9 +1132,66 @@ sample events
 confidence
 ```
 
+### Implemented CLI Debug Views
+
+The current CLI provides:
+
+```text
+profile dashboard table
+profile JSON
+full report JSON with aggregation views
+platform market analysis
+top templates by system
+primitive-weight comparison by request count and latency cost
+```
+
+The simulator saves the same dashboard/debug surfaces as artifacts:
+
+```text
+dashboard.txt
+platform.txt
+templates.txt
+primitive-weights.txt
+profiles.json
+report.json
+validation.json
+events.json
+scenario.yaml
+```
+
+### Implemented Elasticsearch/Kibana Debug Surface
+
+Simulator runs can optionally be exported to local Elasticsearch. Raw query text/body is omitted by default and is included only when explicitly requested for synthetic debugging.
+
+Current Elasticsearch export indices:
+
+```text
+workload-sim-runs
+workload-primitive-events
+workload-primitive-signals
+workload-aggregate-windows
+workload-profiles
+workload-recommendations
+workload-lineage-recommendations
+workload-lineage-templates
+workload-lineage-events
+workload-lineage-validation
+```
+
+Current Kibana setup can create:
+
+```text
+data views for every workload index
+saved Discover sessions for event lookup, recommendation backtrace, template evidence, event forward trace, and validation
+a generated Workload Intelligence Lineage dashboard
+run_id, event_id, and template_id dashboard controls
+```
+
+The Kibana lineage dashboard is a local debug and verification surface. It is not the future product web dashboard.
+
 ---
 
-## 12. Agile Delivery Plan
+## 13. Agile Delivery Plan
 
 ### Sprint 0: Specs Only
 
@@ -1124,6 +1327,38 @@ Recommendation includes:
 
 ---
 
+### Implemented Extension: Simulator, Lineage, and Local Trust Tooling
+
+This work grew naturally while exercising and debugging the spec-driven pipeline. It belongs after the first recommendation slice because it explains and verifies the full flow from generated scenario to recommendation.
+
+Implemented:
+
+```text
+YAML scenario simulator
+PostgreSQL, Redis, and Elasticsearch scenario generation
+response metadata distributions and artifact output
+local scenario editor UI
+capability-backed primitive picker
+response-derived signal separation
+Matcher Source inspector
+expected-vs-observed simulator validation
+optional Elasticsearch indexing
+Kibana data views
+Kibana saved Discover sessions
+Kibana lineage dashboard
+```
+
+Acceptance criteria now covered:
+
+```text
+Simulator scenarios produce raw events, profiles, dashboards, and validation artifacts.
+Pipeline outputs can be indexed into local Elasticsearch for inspection.
+Kibana can show recommendation backtrace, template evidence, event forward trace, and expected-vs-observed validation.
+Raw query export remains opt-in for synthetic local debugging.
+```
+
+---
+
 ### Sprint 5: Feedback and LLM Assist
 
 Add human review workflow:
@@ -1169,7 +1404,7 @@ Reviewed labels are stored and can be used later for calibration or training.
 
 ---
 
-## 13. Testing Philosophy
+## 14. Testing Philosophy
 
 Tests should be spec-driven.
 
@@ -1209,9 +1444,24 @@ expected:
       matched: false
 ```
 
+Current test coverage includes:
+
+```text
+spec integrity checks
+Elasticsearch primitive extraction
+PostgreSQL primitive extraction
+template fingerprinting
+pipeline profiles and recommendations
+daily aggregation views and weighting modes
+simulator validation and UI capability payloads
+Matcher Source inspector behavior
+Elasticsearch export documents and mappings
+Kibana data views, saved searches, and lineage dashboard payload
+```
+
 ---
 
-## 14. Implementation Rules for Codex
+## 15. Implementation Rules for Codex
 
 1. Keep classification logic declarative where possible.
 2. Do not hardcode ontology knowledge deeply inside Python functions.
@@ -1226,7 +1476,7 @@ expected:
 
 ---
 
-## 15. Definition of Done for MVP
+## 16. Definition of Done for MVP
 
 The MVP is done when the system can process synthetic gateway events and produce an explainable result like:
 

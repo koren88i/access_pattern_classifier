@@ -107,6 +107,14 @@ Open Kibana at:
 http://localhost:5601
 ```
 
+The simulator UI can also write a run to Elasticsearch. Start it with:
+
+```powershell
+python run_workload_simulator.py --ui
+```
+
+Then select `Write to Elasticsearch` before running the scenario. `Include raw query samples` stays separate and off by default.
+
 Useful data views:
 
 - `workload-primitive-signals`: primitive signal weight over time by platform, system, scenario, and template.

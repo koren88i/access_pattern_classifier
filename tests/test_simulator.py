@@ -2,11 +2,12 @@ import json
 import threading
 from http.server import ThreadingHTTPServer
 from pathlib import Path
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 import pytest
 
 from workload_intelligence.pipeline import primitive_events_from_raw, process_event_report, process_events
+from workload_intelligence.simulator import ui_page, web as simulator_web
 from workload_intelligence.simulator.capabilities import capability_payload
 from workload_intelligence.simulator.generators import generate_events
 from workload_intelligence.simulator.matcher_source import matcher_source_for
@@ -243,6 +244,36 @@ def test_simulator_ui_contains_response_metadata_builder():
     assert "Add more shapes directly in Scenario YAML" in HTML
 
 
+def test_simulator_ui_contains_elasticsearch_export_controls():
+    assert 'id="indexElastic"' in HTML
+    assert 'id="includeRawQuery"' in HTML
+    assert "Write to Elasticsearch" in HTML
+    assert "renderElasticExport" in HTML
+    assert "setup_kibana_data_views" in HTML
+
+
+def test_simulator_ui_page_is_composed_from_named_sections():
+    assert ui_page.HTML == ui_page.render_ui_page()
+    assert ui_page.STYLE.strip().startswith(":root")
+    assert '<div class="status" id="status"></div>' in ui_page.BODY
+    assert "function buildYaml()" in ui_page.SCRIPT
+    assert ui_page.HTML.index("<style>") < ui_page.HTML.index("</style>")
+    assert ui_page.HTML.index("</style>") < ui_page.HTML.index("<body>")
+    assert ui_page.HTML.index("<body>") < ui_page.HTML.index("<script>")
+
+
+def test_simulator_ui_page_sections_keep_concerns_separate():
+    assert "<style>" not in ui_page.BODY
+    assert "<script>" not in ui_page.BODY
+    assert "<body>" not in ui_page.SCRIPT
+    assert "renderMatcherSource" in ui_page.SCRIPT
+    assert "responseMetadataYamlLines" in ui_page.SCRIPT
+    assert "renderElasticExport" in ui_page.SCRIPT
+    assert "renderMatcherSource" in ui_page.MATCHER_SOURCE_SCRIPT
+    assert "responseMetadataYamlLines" in ui_page.RESPONSE_METADATA_SCRIPT
+    assert "renderElasticExport" in ui_page.EXPORT_RENDERING_SCRIPT
+
+
 def test_simulator_web_handler_serves_ui_capabilities_and_matcher_source(tmp_path):
     server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(tmp_path))
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -274,6 +305,89 @@ def test_simulator_web_handler_serves_ui_capabilities_and_matcher_source(tmp_pat
     assert matcher["primitive"] == "text_search"
     assert matcher["sample"]["selected_primitive_signal"]["matched"] is True
     assert any(rule["id"] == "postgres_text_search_predicate" for rule in matcher["rules"])
+
+
+def test_simulator_web_handler_indexes_run_when_requested(monkeypatch, tmp_path):
+    index_calls = []
+    data_view_calls = []
+
+    def fake_index_run(**kwargs):
+        index_calls.append(kwargs)
+        return {
+            "indexed": 7,
+            "indices": ["workload-lineage-events", "workload-sim-runs"],
+        }
+
+    def fake_setup_data_views(kibana_url):
+        data_view_calls.append(kibana_url)
+        return ["workload-lineage-events", "workload-sim-runs"]
+
+    monkeypatch.setattr(simulator_web, "index_run", fake_index_run)
+    monkeypatch.setattr(simulator_web, "setup_data_views", fake_setup_data_views)
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(tmp_path))
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base_url = f"http://127.0.0.1:{server.server_address[1]}"
+    scenario_text = """
+name: ui_elastic_export
+seed: 1
+target:
+  platform: redis
+  system_id: demo
+  customer_id: acme
+  database_or_index: cache
+time_range:
+  start: "2026-04-30T00:00:00Z"
+  end: "2026-05-01T00:00:00Z"
+events: 1
+responses:
+  latency_ms: { distribution: fixed, value: 1 }
+  response_bytes: { distribution: fixed, value: 100 }
+  result_count: { distribution: fixed, value: 1 }
+query_shapes:
+  - name: lookup
+    share: 100
+    primitives: [key_lookup]
+"""
+    body = json.dumps(
+        {
+            "scenario": scenario_text,
+            "index_elastic": True,
+            "include_raw_query": True,
+            "setup_kibana_data_views": True,
+            "elasticsearch_url": "http://elastic.test:9200",
+            "kibana_url": "http://kibana.test:5601",
+        }
+    ).encode("utf-8")
+    request = Request(
+        f"{base_url}/api/run",
+        data=body,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    try:
+        with urlopen(request, timeout=5) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+    assert payload["validation"]["status"] == "ok"
+    assert payload["elastic_export"]["status"] == "ok"
+    assert payload["elastic_export"]["indexed"] == 7
+    assert payload["elastic_export"]["kibana_url"] == "http://kibana.test:5601"
+    assert payload["elastic_export"]["time_range"] == {
+        "start": "2026-04-30T00:00:00Z",
+        "end": "2026-05-01T00:00:00Z",
+    }
+    assert index_calls
+    assert index_calls[0]["elasticsearch_url"] == "http://elastic.test:9200"
+    assert index_calls[0]["include_raw_query"] is True
+    assert index_calls[0]["run_dir"].parent == tmp_path
+    assert data_view_calls == ["http://kibana.test:5601"]
 
 
 def test_matcher_source_exposes_real_code_for_platform_primitive():
