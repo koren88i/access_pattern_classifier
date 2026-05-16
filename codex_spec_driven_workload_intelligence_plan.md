@@ -2,7 +2,7 @@
 
 ## Implementation Status
 
-Last updated: 2026-05-02
+Last updated: 2026-05-16
 
 - Done: Sprint 0 spec artifacts in `specs/`.
 - Done: Sprint 1 end-to-end skeleton for synthetic Elasticsearch events.
@@ -15,7 +15,13 @@ Last updated: 2026-05-02
 - Done: Simulator query flags are backed by capability SSOT, primitive descriptions come from ontology SSOT, and response-derived signals are separated from query-shape controls.
 - Done: Simulator Matcher Source inspector shows generated query, rule condition trace, highlighted normalized matcher fields, primitive rule YAML, and advanced source code.
 - Verified: `python -m pytest` passes.
-- Next: Build saved Kibana dashboards/searches, broaden simulator scenario coverage, and expand Sprint 4 recommendation/parser support.
+- Next: Add multi-scope simulator scenarios that exercise target-scoped profiles, then expand Sprint 4 PostgreSQL parser/recommendation coverage. Kibana saved searches/dashboard setup exists; next Kibana work should be hardening/usability rather than first implementation.
+
+### Recommended Next Slices
+
+1. Add simulator scenarios where the same `system_id + platform` emits multiple `customer_id` and `database_or_index` targets, then verify profiles, lineage, and dashboard rows stay separated.
+2. Expand Sprint 4 PostgreSQL parser and recommendation coverage beyond the current lookup, grouped-analytics, and text-search slices.
+3. Clean up or harden Kibana dashboard/search usability after the scenario coverage is in place, using the new multi-scope runs as realistic validation data.
 
 ## 1. Mission
 
